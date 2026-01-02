@@ -12,9 +12,9 @@ const registerSchema = z.object({
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string(),
     roll_number: z.string().min(1, 'Roll number is required'),
-    school: z.string().min(1, 'School is required'),
-    department: z.string().min(1, 'Department is required'),
-    program: z.string().min(1, 'Program is required'),
+    school: z.enum(['SOP', 'SOET', 'SOA'], { required_error: 'School is required' }),
+    department: z.enum(['CO', 'AIML', 'DS', 'ECS', 'CE', 'ME', 'ECE', 'Electrical', 'Diploma Pharmacy', 'Degree Pharmacy', 'Diploma Architecture', 'Degree Architecture'], { required_error: 'Department is required' }),
+    program: z.enum(['Diploma Engineering', 'Pharmacy', 'Architecture'], { required_error: 'Program is required' }),
     year_of_study: z.string().min(1, 'Year of study is required'),
     admission_year: z.string().min(4, 'Admission year is required'),
     expected_passout_year: z.string().min(4, 'Expected passout year is required'),
@@ -24,6 +24,8 @@ const registerSchema = z.object({
     message: "Passwords don't match",
     path: ["confirmPassword"],
 })
+
+import { supabase } from '../lib/supabase'
 
 export default function Register() {
     const { signUp } = useAuth()
@@ -43,17 +45,28 @@ export default function Register() {
         setIsLoading(true)
         setError('')
         try {
-            const { full_name, email, password, ...profileData } = data
-            const { error } = await signUp(email, password, {
+            const { full_name, email, password, confirmPassword, ...profileData } = data
+
+            // 1. Sign up user
+            const { data: authData, error: authError } = await signUp(email, password, {
                 full_name,
                 ...profileData
             })
-            console.log(data)
-            if (error) throw error
+
+            if (authError) throw authError
+
+
+
+            // Profile is created automatically by database trigger using metadata
+            console.log("Profile Data Sent in Metadata: ", profileData);
+
+            console.log("Profile Data Saved: ", profileData);
+
             // Supabase might require email confirmation.
             // For now, assume auto-login or redirect to login.
             navigate('/')
         } catch (err) {
+            console.error(err)
             setError(err.message)
         } finally {
             setIsLoading(false)
@@ -72,6 +85,7 @@ export default function Register() {
             <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[600px]">
                 <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
                     <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+
                         {/* Full Name */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm font-medium leading-6 text-gray-900">Full Name</label>
@@ -117,23 +131,49 @@ export default function Register() {
                         {/* School */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">School</label>
-                            <input type="text" {...register('school')} className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" />
+                            <select {...register('school')} className="mt-2 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6">
+                                <option value="">Select School</option>
+                                <option value="SOP">SOP</option>
+                                <option value="SOET">SOET</option>
+                                <option value="SOA">SOA</option>
+                            </select>
                             {errors.school && <p className="mt-1 text-sm text-red-600">{errors.school.message}</p>}
                         </div>
 
                         {/* Department */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">Department</label>
-                            <input type="text" {...register('department')} className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" />
+                            <select {...register('department')} className="mt-2 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6">
+                                <option value="">Select Department</option>
+                                <option value="CO">CO</option>
+                                <option value="AIML">AIML</option>
+                                <option value="DS">DS</option>
+                                <option value="ECS">ECS</option>
+                                <option value="CE">CE</option>
+                                <option value="ME">ME</option>
+                                <option value="ECE">ECE</option>
+                                <option value="Electrical">Electrical</option>
+                                <option value="Diploma Pharmacy">Diploma Pharmacy</option>
+                                <option value="Degree Pharmacy">Degree Pharmacy</option>
+                                <option value="Diploma Architecture">Diploma Architecture</option>
+                                <option value="Degree Architecture">Degree Architecture</option>
+                            </select>
                             {errors.department && <p className="mt-1 text-sm text-red-600">{errors.department.message}</p>}
                         </div>
 
+                        {/* Program  */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">Program</label>
-                            <input type="text" {...register('program')} className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" />
+                            <select {...register('program')} className="mt-2 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6">
+                                <option value="">Select Program</option>
+                                <option value="Diploma Engineering">Diploma Engineering</option>
+                                <option value="Pharmacy">Pharmacy</option>
+                                <option value="Architecture">Architecture</option>
+                            </select>
                             {errors.program && <p className="mt-1 text-sm text-red-600">{errors.program.message}</p>}
                         </div>
 
+                        {/* Year  */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">Year of Study</label>
                             <select {...register('year_of_study')} className="mt-2 block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6">
@@ -147,18 +187,21 @@ export default function Register() {
                             {errors.year_of_study && <p className="mt-1 text-sm text-red-600">{errors.year_of_study.message}</p>}
                         </div>
 
+                        {/* Admission year  */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">Admission Year</label>
                             <input type="text" {...register('admission_year')} className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" />
                             {errors.admission_year && <p className="mt-1 text-sm text-red-600">{errors.admission_year.message}</p>}
                         </div>
 
+                        {/* Expected Passout  */}
                         <div>
                             <label className="block text-sm font-medium leading-6 text-gray-900">Expected Passout</label>
                             <input type="text" {...register('expected_passout_year')} className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6" />
                             {errors.expected_passout_year && <p className="mt-1 text-sm text-red-600">{errors.expected_passout_year.message}</p>}
                         </div>
 
+                        {/* Gender  */}
                         <div className="sm:col-span-2">
                             <label className="block text-sm font-medium leading-6 text-gray-900">Gender</label>
                             <div className="mt-2 flex space-x-6">
@@ -177,6 +220,7 @@ export default function Register() {
                             </div>
                             {errors.gender && <p className="mt-1 text-sm text-red-600">{errors.gender.message}</p>}
                         </div>
+
                     </div>
 
                     {error && (

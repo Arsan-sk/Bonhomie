@@ -3,6 +3,7 @@ import Layout from './components/layout/Layout'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Profile from './pages/Profile'
 import Events from './pages/Events'
 import EventDetail from './pages/EventDetail'
 import EventRegistration from './pages/EventRegistration'
@@ -24,6 +25,7 @@ function App() {
           <Route path="/events/:id/register" element={<EventRegistration />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/dashboard" element={<StudentDashboard />} />
           <Route path="/faculty/dashboard" element={<FacultyDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
