@@ -1,7 +1,24 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Calendar, Users, Trophy } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 export default function Landing() {
+    const { user, isAdmin, isCoordinator, loading } = useAuth()
+    const navigate = useNavigate()
+
+    useEffect(() => {
+        if (!loading && user) {
+            if (isAdmin) {
+                navigate('/admin/dashboard')
+            } else if (isCoordinator) {
+                navigate('/coordinator/dashboard')
+            } else {
+                navigate('/student/dashboard')  // Updated to new namespace
+            }
+        }
+    }, [user, isAdmin, isCoordinator, loading, navigate])
+
     return (
         <div className="bg-white">
             {/* Hero Section */}
@@ -20,8 +37,15 @@ export default function Landing() {
                         >
                             Explore Events
                         </Link>
-                        <Link to="/register" className="text-sm font-semibold leading-6 text-gray-900">
-                            Register Now <span aria-hidden="true">→</span>
+                        {!user && (
+                            <Link to="/register" className="text-sm font-semibold leading-6 text-gray-900">
+                                Register Now <span aria-hidden="true">→</span>
+                            </Link>
+                        )}
+                    </div>
+                    <div className="mt-6 flex justify-center">
+                        <Link to="/verify" className="text-xs font-medium text-gray-500 hover:text-primary transition-colors">
+                            Verify Certificate Validity
                         </Link>
                     </div>
                 </div>

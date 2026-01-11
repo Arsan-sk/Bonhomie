@@ -3,11 +3,13 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { Loader2, Edit, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import EventEditor from '../../components/dashboard/EventEditor'
 
 export default function FacultyDashboard() {
     const { user, profile } = useAuth()
     const [assignedEvents, setAssignedEvents] = useState([])
     const [loading, setLoading] = useState(true)
+    const [editingEvent, setEditingEvent] = useState(null)
 
     useEffect(() => {
         if (user) {
@@ -76,7 +78,11 @@ export default function FacultyDashboard() {
                                                 View
                                             </Link>
                                             {/* Edit functionality would go here - simplified for prototype */}
-                                            <button className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-blue-700">
+                                            {/* Edit functionality */}
+                                            <button
+                                                onClick={() => setEditingEvent(event)}
+                                                className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-blue-700"
+                                            >
                                                 <Edit className="h-4 w-4 mr-2" /> Edit
                                             </button>
                                         </div>
@@ -91,6 +97,13 @@ export default function FacultyDashboard() {
                     )}
                 </div>
             </div>
+            {editingEvent && (
+                <EventEditor
+                    event={editingEvent}
+                    onClose={() => setEditingEvent(null)}
+                    onUpdate={fetchAssignedEvents}
+                />
+            )}
         </div>
     )
 }

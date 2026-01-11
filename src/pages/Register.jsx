@@ -50,6 +50,7 @@ export default function Register() {
             // 1. Sign up user
             const { data: authData, error: authError } = await signUp(email, password, {
                 full_name,
+                role: 'student',
                 ...profileData
             })
 

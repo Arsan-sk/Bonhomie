@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 import { Loader2 } from 'lucide-react'
 
 const loginSchema = z.object({
@@ -29,10 +30,42 @@ export default function Login() {
         setIsLoading(true)
         setError('')
         try {
+            console.log('Attempting login for:', data.email)
             const { error } = await signIn(data.email, data.password)
             if (error) throw error
-            navigate('/')
+
+            console.log('Login successful, fetching profile...')
+
+            // Fetch user profile to determine role
+            const { data: { user: authUser } } = await supabase.auth.getUser()
+            if (!authUser) throw new Error('User not found after login')
+
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', authUser.id)
+                .single()
+
+            if (profileError) {
+                console.error('Profile fetch error:', profileError)
+                // Default to student dashboard if profile fetch fails
+                navigate('/dashboard')
+                return
+            }
+
+            // Role-based redirect
+            const role = profileData?.role
+            console.log('User role:', role)
+
+            if (role === 'admin') {
+                navigate('/admin/dashboard')
+            } else if (role === 'coordinator') {
+                navigate('/coordinator/dashboard')
+            } else {
+                navigate('/student/dashboard')  // Updated to new namespace
+            }
         } catch (err) {
+            console.error('Login error:', err)
             setError(err.message)
         } finally {
             setIsLoading(false)
