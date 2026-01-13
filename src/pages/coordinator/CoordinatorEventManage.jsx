@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity } from 'lucide-react'
+import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 
@@ -10,6 +10,8 @@ export default function CoordinatorEventManage() {
     const [activeTab, setActiveTab] = useState('overview')
     const [event, setEvent] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [expandedTeams, setExpandedTeams] = useState(new Set()) // Track which teams are expanded
+    const [showMembersOnly, setShowMembersOnly] = useState(false) // Toggle for members view
 
     // Participants State
     const [participants, setParticipants] = useState([])
@@ -26,10 +28,13 @@ export default function CoordinatorEventManage() {
     const [selectedRoundId, setSelectedRoundId] = useState('')
     const [roundParticipants, setRoundParticipants] = useState([])
     const [loadingResults, setLoadingResults] = useState(false)
+    const [resultsView, setResultsView] = useState('manage') // 'manage' or 'leaderboard'
 
     // Payments State
     const [payments, setPayments] = useState([])
     const [loadingPayments, setLoadingPayments] = useState(false)
+    const [paymentModeFilter, setPaymentModeFilter] = useState('all') // 'all', 'cash', 'online'
+    const [screenshotModal, setScreenshotModal] = useState({ isOpen: false, url: '' })
 
     useEffect(() => {
         fetchEventDetails()
@@ -42,11 +47,24 @@ export default function CoordinatorEventManage() {
     }, [activeTab, id])
 
     useEffect(() => {
-        if (activeTab === 'results' && selectedRoundId) fetchRoundParticipants(selectedRoundId)
-        else if (activeTab === 'results' && rounds.length > 0 && !selectedRoundId) {
+        if (selectedRoundId) {
+            fetchRoundParticipants(selectedRoundId)
+        } else if (activeTab === 'results' && rounds.length > 0 && !selectedRoundId) {
             setSelectedRoundId(rounds[0].id)
         }
     }, [activeTab, selectedRoundId, rounds])
+
+    const toggleTeamExpansion = (registrationId) => {
+        setExpandedTeams(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(registrationId)) {
+                newSet.delete(registrationId)
+            } else {
+                newSet.add(registrationId)
+            }
+            return newSet
+        })
+    }
 
     const fetchEventDetails = async () => {
         setLoading(true)
@@ -59,10 +77,8 @@ export default function CoordinatorEventManage() {
     const fetchParticipants = async () => {
         setLoadingParticipants(true)
         const { data, error } = await supabase.from('registrations')
-            .select(`*, user:profiles (id, full_name, college_email, roll_number)`)
+            .select(`*, user:profiles (id, full_name, college_email, roll_number, department, year_of_study)`)
             .eq('event_id', id)
-            .select(`*, user:profiles (id, full_name, college_email, roll_number)`)
-        //.order('created_at', { ascending: false }) // created_at might be missing
         if (error) console.error('Error fetching participants:', error)
         else setParticipants(data || [])
         setLoadingParticipants(false)
@@ -94,19 +110,47 @@ export default function CoordinatorEventManage() {
 
     const fetchPayments = async () => {
         setLoadingPayments(true)
-        let { data, error } = await supabase.from('payments')
-            .select(`*, user:profiles(full_name, college_email)`)
+        console.log('Fetching payments for event:', id)
+
+        // Fetch ALL pending registrations
+        const { data, error } = await supabase
+            .from('registrations')
+            .select(`*, user:profiles (id, full_name, college_email, roll_number)`)
             .eq('event_id', id)
+            .eq('status', 'pending')
 
-        if (error || !data) {
-            const { data: regData, error: regError } = await supabase.from('registrations')
-                .select(`id, payment_status, transaction_id, screenshot_url, amount, created_at, user:profiles(full_name, college_email)`)
-                .eq('event_id', id)
-                .not('transaction_id', 'is', null)
-
-            if (!regError) setPayments(regData || [])
+        if (error) {
+            console.error('Error fetching payments:', error)
+            setPayments([])
         } else {
-            setPayments(data || [])
+            // 🔥 SIMPLIFIED FILTER: Only show LEADERS or registrations with payment info
+            // This correctly handles:
+            // - Team leaders (have team_members array)
+            // - Solo participants with cash mode (no transaction yet, but valid)
+            // - Solo participants with hybrid/online (have transaction)
+            const filteredPayments = (data || []).filter(reg => {
+                // Show if it's a team leader
+                if (reg.team_members && reg.team_members.length > 0) {
+                    return true;
+                }
+
+                // For non-leaders (solo participants or team members):
+                // Show if they have ANY of: transaction_id, screenshot, OR payment_mode
+                // This catches cash mode registrations (no transaction yet)
+                // Hide only if they're truly empty (team member created automatically)
+                const hasPaymentInfo = reg.transaction_id || reg.payment_screenshot_path || reg.payment_mode;
+
+                // Additional check: if team_members is explicitly an empty array (not null),
+                // AND no payment info, it's likely a team member
+                if (Array.isArray(reg.team_members) && reg.team_members.length === 0 && !hasPaymentInfo) {
+                    return false; // Hide team members
+                }
+
+                return hasPaymentInfo; // Show solo participants
+            })
+
+            console.log('Filtered payments (leaders + solo):', filteredPayments.length, '/', data?.length)
+            setPayments(filteredPayments)
         }
 
         setLoadingPayments(false)
@@ -126,11 +170,10 @@ export default function CoordinatorEventManage() {
         else fetchRounds()
     }
 
-    const handleParticipantAction = async (registrationId, action) => {
-        if (!confirm(`Are you sure you want to ${action} this participant?`)) return
-        const newStatus = action === 'approve' ? 'confirmed' : 'cancelled'
-        const { error } = await supabase.from('registrations').update({ status: newStatus }).eq('id', registrationId)
-        if (error) alert('Error updating status')
+    const handleRejectParticipant = async (registrationId) => {
+        if (!confirm('Are you sure you want to reject this participant?')) return
+        const { error } = await supabase.from('registrations').update({ status: 'rejected' }).eq('id', registrationId)
+        if (error) alert('Error rejecting participant')
         else fetchParticipants()
     }
 
@@ -153,12 +196,74 @@ export default function CoordinatorEventManage() {
         else fetchRoundParticipants(selectedRoundId)
     }
 
-    const verifyPayment = async (id, isFromRegistrations, status) => {
-        const table = isFromRegistrations ? 'registrations' : 'payments'
-        const field = isFromRegistrations ? 'payment_status' : 'status'
-        const { error } = await supabase.from(table).update({ [field]: status }).eq('id', id)
-        if (error) alert("Update failed")
-        else fetchPayments()
+    const verifyPayment = async (registrationId) => {
+        try {
+            // 1. Get leader registration details
+            const { data: leaderReg, error: fetchError } = await supabase
+                .from('registrations')
+                .select('*')
+                .eq('id', registrationId)
+                .single()
+
+            if (fetchError) throw fetchError
+
+            // 2. Update leader registration status to 'confirmed'
+            const { error } = await supabase
+                .from('registrations')
+                .update({ status: 'confirmed' })
+                .eq('id', registrationId)
+
+            if (error) throw error
+
+            // 3. If team event, verify all member registrations
+            if (leaderReg.team_members && leaderReg.team_members.length > 0) {
+                const memberIds = leaderReg.team_members.map(m => m.id)
+
+                const { error: bulkError } = await supabase
+                    .from('registrations')
+                    .update({ status: 'confirmed' })
+                    .eq('event_id', leaderReg.event_id)
+                    .in('profile_id', memberIds)
+
+                if (bulkError) console.error('Bulk verify error:', bulkError)
+            }
+
+            // 4. Refresh views
+            await fetchPayments()
+            await fetchParticipants()
+
+            const teamMsg = (leaderReg.team_members?.length > 0)
+                ? ` and ${leaderReg.team_members.length} team member(s)`
+                : ''
+            alert(`Payment verified! Student${teamMsg} moved to Participants.`)
+        } catch (error) {
+            console.error('Verification error:', error)
+            alert('Failed to verify payment: ' + error.message)
+        }
+    }
+
+    const exportResults = () => {
+        if (roundParticipants.length === 0) {
+            alert('No participants to export')
+            return
+        }
+
+        // Sort by score descending
+        const sorted = [...roundParticipants]
+            .filter(rp => rp.status !== 'eliminated')
+            .sort((a, b) => (b.score || 0) - (a.score || 0))
+
+        const csv = sorted.map((rp, i) =>
+            `${i + 1},"${rp.registration?.user?.full_name || 'Unknown'}",${rp.registration?.user?.roll_number || '-'},${rp.score || 0},${rp.status}`
+        ).join('\n')
+
+        const blob = new Blob([`Rank,Name,Roll Number,Score,Status\n${csv}`], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${event.name}_results_${Date.now()}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
     }
 
     if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
@@ -170,21 +275,67 @@ export default function CoordinatorEventManage() {
         { id: 'rounds', label: 'Rounds', icon: Trophy },
         { id: 'results', label: 'Results', icon: BarChart3 },
         { id: 'payments', label: 'Payments', icon: DollarSign },
-        { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     ]
 
     const participantColumns = [
         { key: 'user', title: 'Participant', sortable: true, render: (row) => (<div><div className="font-bold text-gray-900">{row.user?.full_name || 'Unknown'}</div><div className="text-xs text-gray-500">{row.user?.college_email}</div></div>) },
         { key: 'roll', title: 'Roll No', render: (row) => row.user?.roll_number || '-' },
-        { key: 'status', title: 'Status', sortable: true, render: (row) => (<span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${row.status === 'confirmed' ? 'bg-green-100 text-green-700' : row.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{row.status}</span>) },
-        { key: 'actions', title: 'Actions', render: (row) => (<div className="flex gap-2"><button onClick={() => handleParticipantAction(row.id, 'approve')} disabled={row.status === 'confirmed'} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50" title="Approve"><Check className="h-4 w-4" /></button><button onClick={() => handleParticipantAction(row.id, 'remove')} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg" title="Remove"><XIcon className="h-4 w-4" /></button></div>) }
+        { key: 'department', title: 'Department', render: (row) => row.user?.department || '-' },
+        { key: 'year', title: 'Year', render: (row) => row.user?.year_of_study || '-' },
+        {
+            key: 'team', title: 'Team', render: (row) => {
+                try {
+                    // Check if this is a LEADER (has team_members array with length > 0)
+                    if (row.team_members && row.team_members.length > 0) {
+                        const teamSize = row.team_members.length + 1; // +1 for leader
+                        return `Team Leader · ${teamSize} members`;
+                    }
+
+                    // Check if this is a MEMBER (find if their ID is in another registration's team_members)
+                    // We need to search through all participants to find the leader
+                    const leader = participants.find(p =>
+                        p.team_members &&
+                        p.team_members.length > 0 &&
+                        p.team_members.some(m => m.id === row.user?.id)
+                    );
+
+                    if (leader) {
+                        const teamSize = leader.team_members.length + 1; // +1 for leader
+                        return `Team Member · ${teamSize} total`;
+                    }
+
+                    return 'Solo';
+                } catch (e) {
+                    console.error('Team render error:', e);
+                    return 'Solo';
+                }
+            }
+        },
+        { key: 'status', title: 'Status', sortable: true, render: (row) => (<span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${row.status === 'confirmed' ? 'bg-green-100 text-green-700' : row.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{row.status}</span>) },
+        { key: 'actions', title: 'Actions', render: (row) => (<button onClick={() => handleRejectParticipant(row.id)} disabled={row.status === 'rejected'} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed" title="Reject participant">Reject</button>) }
     ]
 
     const paymentColumns = [
-        { key: 'user', title: 'User', render: (row) => row.user?.full_name || 'Unknown' },
+        {
+            key: 'user',
+            title: 'User',
+            render: (row) => {
+                const isTeamLeader = row.team_members && row.team_members.length > 0;
+                return (
+                    <div>
+                        <div className="font-medium">{row.user?.full_name || 'Unknown'}</div>
+                        {isTeamLeader && (
+                            <div className="text-xs text-indigo-600 font-semibold flex items-center gap-1">
+                                <Users className="h-3 w-3" /> Team Leader · {row.team_members.length + 1} members
+                            </div>
+                        )}
+                    </div>
+                )
+            }
+        },
         { key: 'amount', title: 'Amount', render: (row) => `₹${row.amount || 500}` },
         { key: 'txn', title: 'Transaction ID', render: (row) => <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{row.transaction_id || 'N/A'}</span> },
-        { key: 'screenshot', title: 'Proof', render: (row) => row.screenshot_url ? <a href={row.screenshot_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1"><Eye className="h-3 w-3" /> View</a> : <span className="text-gray-400">None</span> },
+        { key: 'screenshot', title: 'Proof', render: (row) => row.payment_screenshot_path ? <a href={row.payment_screenshot_path} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1"><Eye className="h-3 w-3" /> View</a> : <span className="text-gray-400">None</span> },
         { key: 'status', title: 'Status', render: (row) => <span className={`px-2 py-1 rounded text-xs font-bold ${row.payment_status === 'verified' || row.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{row.payment_status || row.status || 'Pending'}</span> },
         {
             key: 'actions', title: 'Verify', render: (row) => (
@@ -233,9 +384,10 @@ export default function CoordinatorEventManage() {
                     {activeTab === 'overview' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-8">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100"><p className="text-xs text-indigo-600 uppercase font-bold tracking-wider">Total Registrations</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{participants.length > 0 ? participants.length : '-'}</h3></div>
-                                <div className="p-4 rounded-xl bg-green-50 border border-green-100"><p className="text-xs text-green-600 uppercase font-bold tracking-wider">Confirmed</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{participants.filter(p => p.status === 'confirmed').length || '-'}</h3></div>
-                                <div className="p-4 rounded-xl bg-orange-50 border border-orange-100"><p className="text-xs text-orange-600 uppercase font-bold tracking-wider">Pending</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{participants.filter(p => p.status !== 'confirmed').length || '-'}</h3></div>
+                                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100"><p className="text-xs text-indigo-600 uppercase font-bold tracking-wider">Total Registrations</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{loadingParticipants ? '...' : (participants.length || 0)}</h3></div>
+                                <div className="p-4 rounded-xl bg-green-50 border border-green-100"><p className="text-xs text-green-600 uppercase font-bold tracking-wider">Confirmed</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'confirmed').length || 0)}</h3></div>
+                                <div className="p-4 rounded-xl bg-yellow-50 border border-yellow-100"><p className="text-xs text-yellow-600 uppercase font-bold tracking-wider">Pending</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'pending').length || 0)}</h3></div>
+                                <div className="p-4 rounded-xl bg-red-50 border border-red-100"><p className="text-xs text-red-600 uppercase font-bold tracking-wider">Rejected</p><h3 className="text-2xl font-bold text-gray-900 mt-1">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'rejected').length || 0)}</h3></div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 <div className="md:col-span-2 space-y-6">
@@ -243,7 +395,7 @@ export default function CoordinatorEventManage() {
                                     <div><h3 className="text-lg font-bold text-gray-900 mb-2">Rules</h3><div className="prose prose-sm prose-indigo text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100">{event.rules || 'No rules.'}</div></div>
                                 </div>
                                 <div className="space-y-6">
-                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm"><h4 className="text-sm font-bold text-gray-900 mb-3">Event Details</h4><dl className="space-y-3 text-sm"><div className="flex justify-between"><dt className="text-gray-500">Day</dt><dd className="font-medium">{event.day}</dd></div><div className="flex justify-between"><dt className="text-gray-500">Mode</dt><dd className="font-medium">{event.mode}</dd></div><div className="flex justify-between"><dt className="text-gray-500">Fee</dt><dd className="font-medium text-green-600">₹{event.registration_fee}</dd></div></dl></div>
+                                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm"><h4 className="text-sm font-bold text-gray-900 mb-3">Event Details</h4><dl className="space-y-3 text-sm"><div className="flex justify-between"><dt className="text-gray-500">Day</dt><dd className="font-medium">{event.day}</dd></div><div className="flex justify-between"><dt className="text-gray-500">Mode</dt><dd className="font-medium">{event.mode}</dd></div><div className="flex justify-between"><dt className="text-gray-500">Fee</dt><dd className="font-medium text-green-600">₹{event.fee || 0}</dd></div></dl></div>
                                 </div>
                             </div>
                         </div>
@@ -253,11 +405,156 @@ export default function CoordinatorEventManage() {
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="text-lg font-bold text-gray-900">Participants</h3><p className="text-sm text-gray-500">Manage individuals and teams.</p></div>
-                                <button className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100"><Download className="h-4 w-4" /> Export CSV</button>
+                                <div className="flex gap-2">
+                                    {/* Members Only Toggle (Group Events Only) */}
+                                    {event?.event_type === 'group' && (
+                                        <button
+                                            onClick={() => setShowMembersOnly(!showMembersOnly)}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${showMembersOnly
+                                                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                                : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                                                }`}
+                                        >
+                                            <Users className="h-4 w-4" />
+                                            {showMembersOnly ? 'Show Leaders' : 'Members Only'}
+                                        </button>
+                                    )}
+                                    <button className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100"><Download className="h-4 w-4" /> Export CSV</button>
+                                </div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                <SmartTable columns={participantColumns} data={participants.filter(p => p.user?.full_name?.toLowerCase().includes(participantSearch.toLowerCase()))} loading={loadingParticipants} searchable={true} onSearchChange={setParticipantSearch} emptyMessage="No participants." />
-                            </div>
+                            {loadingParticipants ? (
+                                <div className="text-center py-10">Loading...</div>
+                            ) : participants.length === 0 ? (
+                                <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed"><Users className="h-10 w-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No participants yet.</p></div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {(() => {
+                                        const isGroupEvent = event?.event_type === 'group';
+
+                                        let displayParticipants;
+
+                                        if (isGroupEvent) {
+                                            const confirmed = participants.filter(p => p.status === 'confirmed');
+
+                                            if (showMembersOnly) {
+                                                // MEMBERS ONLY MODE: Show participants with EMPTY team_members
+                                                displayParticipants = confirmed.filter(p =>
+                                                    !p.team_members || p.team_members.length === 0
+                                                );
+                                                console.log('👥 MEMBERS ONLY MODE - Showing', displayParticipants.length, 'members');
+                                            } else {
+                                                // LEADERS MODE (default): Show participants with NON-EMPTY team_members
+                                                displayParticipants = confirmed.filter(p =>
+                                                    p.team_members && p.team_members.length > 0
+                                                );
+                                                console.log('👑 LEADERS MODE - Showing', displayParticipants.length, 'leaders');
+                                            }
+                                        } else {
+                                            // Individual events: show all confirmed
+                                            displayParticipants = participants.filter(p => p.status === 'confirmed');
+                                        }
+
+                                        return displayParticipants.map((participant) => {
+                                            const isLeader = participant.team_members && participant.team_members.length > 0;
+                                            const isExpanded = expandedTeams.has(participant.id);
+                                            const totalTeamSize = isLeader ? participant.team_members.length + 1 : 1;
+
+                                            return (
+                                                <div
+                                                    key={participant.id}
+                                                    className="group border border-gray-200 rounded-lg overflow-hidden hover:border-indigo-300 transition"
+                                                    onMouseEnter={() => !showMembersOnly && isLeader && toggleTeamExpansion(participant.id)}
+                                                    onMouseLeave={() => !showMembersOnly && isLeader && toggleTeamExpansion(participant.id)}
+                                                >
+                                                    <div className={`p-4 flex items-center justify-between ${isLeader ? 'bg-indigo-50' : 'bg-white'}`}>
+                                                        <div className="flex items-center gap-4 flex-1">
+                                                            <div className="h-12 w-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold">
+                                                                {participant.user?.full_name?.[0]?.toUpperCase() || '?'}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="font-bold text-gray-900">{participant.user?.full_name || 'Unknown'}</span>
+                                                                    {showMembersOnly ? (
+                                                                        <span className="px-2 py-1 bg-gray-500 text-white text-xs font-bold rounded-full">
+                                                                            Team Member
+                                                                        </span>
+                                                                    ) : isLeader && (
+                                                                        <>
+                                                                            <span className="px-2 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
+                                                                                <Users className="h-3 w-3" />Team Leader
+                                                                            </span>
+                                                                            <span className="px-2 py-1 bg-purple-600 text-white text-xs font-bold rounded-full">
+                                                                                Team Members: {totalTeamSize}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-sm text-gray-600">{participant.user?.college_email} • {participant.user?.roll_number}</div>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${participant.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{participant.status}</span>
+                                                        </div>
+
+                                                        {/* Reject Button */}
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (isLeader && !showMembersOnly) {
+                                                                    // Bulk reject team
+                                                                    if (!confirm(`Reject entire team? This will reject the leader and all ${participant.team_members.length} team members.`)) return;
+
+                                                                    try {
+                                                                        // Get member profile IDs
+                                                                        const memberProfileIds = participant.team_members.map(m => m.id);
+
+                                                                        // Reject all team members
+                                                                        const { error: memberError } = await supabase
+                                                                            .from('registrations')
+                                                                            .update({ status: 'rejected' })
+                                                                            .eq('event_id', id)
+                                                                            .in('profile_id', memberProfileIds);
+
+                                                                        if (memberError) {
+                                                                            console.error('Error rejecting team members:', memberError);
+                                                                            alert('Error rejecting team members');
+                                                                            return;
+                                                                        }
+
+                                                                        // Reject leader
+                                                                        await handleRejectParticipant(participant.id);
+                                                                    } catch (error) {
+                                                                        console.error('Bulk reject error:', error);
+                                                                        alert('Error rejecting team');
+                                                                    }
+                                                                } else {
+                                                                    // Individual participant/member
+                                                                    handleRejectParticipant(participant.id);
+                                                                }
+                                                            }}
+                                                            className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
+                                                        >
+                                                            {isLeader && !showMembersOnly ? 'Reject Team' : 'Reject'}
+                                                        </button>
+                                                    </div>
+                                                    {!showMembersOnly && isLeader && (
+                                                        <div className={`transition-all duration-300 ${isExpanded ? 'max-h-96' : 'max-h-0'} overflow-hidden`}>
+                                                            <div className="bg-gray-50 border-t p-4">
+                                                                <div className="text-xs font-bold text-gray-500 mb-2">TEAM MEMBERS:</div>
+                                                                <div className="grid md:grid-cols-2 gap-2">
+                                                                    {participant.team_members.map((m, i) => (
+                                                                        <div key={m.id} className="p-3 bg-white rounded border flex items-center gap-3">
+                                                                            <div className="h-8 w-8 rounded-full bg-gray-400 text-white flex items-center justify-center font-bold text-sm">{m.full_name?.[0] || '?'}</div>
+                                                                            <div className="flex-1"><div className="font-medium text-sm">{m.full_name}</div><div className="text-xs text-gray-500">{m.roll_number}</div></div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            )}
                         </div>
                     )}
                     {/* ROUNDS */}
@@ -283,12 +580,19 @@ export default function CoordinatorEventManage() {
                     {activeTab === 'results' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Score & Results</h3><p className="text-sm text-gray-500">Enter scores and qualify winners.</p></div>
-                                <div className="w-64">
-                                    <AdminSelect value={selectedRoundId} onChange={e => setSelectedRoundId(e.target.value)}>
-                                        <option value="" disabled>Select Round</option>
-                                        {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                    </AdminSelect>
+                                <div><h3 className="text-lg font-bold text-gray-900">Score & Results</h3><p className="text-sm text-gray-500">Enter scores and view leaderboard.</p></div>
+                                <div className="flex gap-3">
+                                    {/* View Toggle */}
+                                    <div className="flex bg-gray-100 rounded-lg p-1">
+                                        <button onClick={() => setResultsView('manage')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'manage' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Manage Scores</button>
+                                        <button onClick={() => setResultsView('leaderboard')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'leaderboard' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Leaderboard</button>
+                                    </div>
+                                    <div className="w-64">
+                                        <AdminSelect value={selectedRoundId} onChange={e => setSelectedRoundId(e.target.value)}>
+                                            <option value="" disabled>Select Round</option>
+                                            {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                        </AdminSelect>
+                                    </div>
                                 </div>
                             </div>
 
@@ -301,7 +605,53 @@ export default function CoordinatorEventManage() {
                                             <p className="text-gray-500 mb-4">No participants found in this round.</p>
                                             <button onClick={populateRound1} className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100">Fetch Participants from Registrations</button>
                                         </div>
+                                    ) : resultsView === 'leaderboard' ? (
+                                        // LEADERBOARD VIEW
+                                        (() => {
+                                            const ranked = [...roundParticipants]
+                                                .filter(rp => rp.status !== 'eliminated')
+                                                .sort((a, b) => (b.score || 0) - (a.score || 0))
+
+                                            return (
+                                                <div className="p-6 space-y-4">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <h4 className="text-lg font-bold">🏆 Leaderboard</h4>
+                                                        <button onClick={exportResults} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md">
+                                                            <Download className="h-4 w-4" /> Export CSV
+                                                        </button>
+                                                    </div>
+                                                    {ranked.length === 0 ? (
+                                                        <p className="text-center text-gray-500 py-8">No qualified participants yet</p>
+                                                    ) : (
+                                                        ranked.map((rp, index) => (
+                                                            <div key={rp.id} className={`flex items-center gap-4 p-4 rounded-xl transition ${index === 0 ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 shadow-md' :
+                                                                index === 1 ? 'bg-gradient-to-r from-gray-50 to-slate-100 border-2 border-gray-400' :
+                                                                    index === 2 ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300' :
+                                                                        'bg-gray-50 border border-gray-200'
+                                                                }`}>
+                                                                <div className="text-3xl font-bold w-14 text-center">
+                                                                    {index + 1}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="font-bold text-lg text-gray-900">{rp.registration?.user?.full_name || 'Unknown'}</div>
+                                                                    <div className="text-sm text-gray-600">{rp.registration?.user?.roll_number || '-'}</div>
+                                                                </div>
+                                                                <div className="text-2xl font-bold text-indigo-600">
+                                                                    {rp.score || 0} pts
+                                                                </div>
+                                                                {index < 3 && (
+                                                                    <div className="text-4xl">
+                                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )
+                                        })()
                                     ) : (
+                                        // MANAGE SCORES VIEW (existing table)
                                         <table className="w-full text-sm text-left">
                                             <thead className="bg-gray-50 border-b border-gray-100 text-gray-500"><tr><th className="px-6 py-4">Participant</th><th className="px-6 py-4">Score</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -327,10 +677,140 @@ export default function CoordinatorEventManage() {
                     {activeTab === 'payments' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify transaction IDs and screenshots.</p></div>
+                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants.</p></div>
+
+                                {/* Payment Mode Toggle */}
+                                <div className="flex gap-2 border border-gray-200 rounded-lg p-1 bg-gray-50">
+                                    <button
+                                        onClick={() => setPaymentModeFilter('all')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${paymentModeFilter === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        onClick={() => setPaymentModeFilter('cash')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${paymentModeFilter === 'cash' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                    >
+                                        💵 Cash
+                                    </button>
+                                    <button
+                                        onClick={() => setPaymentModeFilter('online')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${paymentModeFilter === 'online' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                    >
+                                        📱 Online
+                                    </button>
+                                </div>
                             </div>
+
                             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                <SmartTable columns={paymentColumns} data={payments} loading={loadingPayments} emptyMessage="No transactions found." />
+                                {(() => {
+                                    // Filter payments by mode
+                                    const filteredPayments = payments.filter(p => {
+                                        if (paymentModeFilter === 'all') return true
+                                        if (paymentModeFilter === 'cash') return p.payment_mode === 'cash'
+                                        if (paymentModeFilter === 'online') return p.payment_mode === 'hybrid' || p.payment_mode === 'online'
+                                        return true
+                                    })
+
+                                    // Dynamic columns based on filter
+                                    const paymentColumns = paymentModeFilter === 'cash' ? [
+                                        {
+                                            key: 'user', title: 'Student', render: (row) => (
+                                                <div>
+                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                    <div className="text-xs text-gray-500">{row.user?.roll_number} • {row.user?.department}</div>
+                                                </div>
+                                            )
+                                        },
+                                        { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
+                                        {
+                                            key: 'verify', title: 'Action', render: (row) => (
+                                                <button
+                                                    onClick={() => verifyPayment(row.id)}
+                                                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition"
+                                                >
+                                                    ✓ Verify Cash
+                                                </button>
+                                            )
+                                        }
+                                    ] : paymentModeFilter === 'online' ? [
+                                        {
+                                            key: 'user', title: 'Student', render: (row) => (
+                                                <div>
+                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                    <div className="text-xs text-gray-500">{row.user?.roll_number}</div>
+                                                </div>
+                                            )
+                                        },
+                                        { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
+                                        { key: 'txn', title: 'Transaction ID', render: (row) => row.transaction_id ? <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{row.transaction_id}</span> : <span className="text-gray-400 text-xs">Not provided</span> },
+                                        {
+                                            key: 'screenshot', title: 'Screenshot', render: (row) => row.payment_screenshot_path ? (
+                                                <button
+                                                    onClick={() => setScreenshotModal({ isOpen: true, url: row.payment_screenshot_path })}
+                                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 text-sm font-medium"
+                                                >
+                                                    <Eye className="h-4 w-4" /> View
+                                                </button>
+                                            ) : <span className="text-gray-400 text-xs">Not uploaded</span>
+                                        },
+                                        {
+                                            key: 'verify', title: 'Action', render: (row) => (
+                                                <button
+                                                    onClick={() => verifyPayment(row.id)}
+                                                    disabled={!row.transaction_id || !row.payment_screenshot_path}
+                                                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    ✓ Verify
+                                                </button>
+                                            )
+                                        }
+                                    ] : [
+                                        // 'all' mode - shows all payments with smart verify logic
+                                        {
+                                            key: 'user', title: 'Student', render: (row) => (
+                                                <div>
+                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                    <div className="text-xs text-gray-500">{row.user?.roll_number} • {row.user?.department}</div>
+                                                </div>
+                                            )
+                                        },
+                                        { key: 'mode', title: 'Mode', render: (row) => <span className={`px-2 py-1 rounded text-xs font-semibold ${row.payment_mode === 'cash' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>{row.payment_mode === 'cash' ? '💵 Cash' : '💳 Online'}</span> },
+                                        { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
+                                        { key: 'txn', title: 'Transaction ID', render: (row) => row.transaction_id ? <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{row.transaction_id}</span> : <span className="text-gray-400 text-xs">N/A</span> },
+                                        {
+                                            key: 'screenshot', title: 'Proof', render: (row) => row.payment_screenshot_path ? (
+                                                <button
+                                                    onClick={() => setScreenshotModal({ isOpen: true, url: row.payment_screenshot_path })}
+                                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 text-sm font-medium"
+                                                >
+                                                    <Eye className="h-4 w-4" /> View
+                                                </button>
+                                            ) : <span className="text-gray-400 text-xs">None</span>
+                                        },
+                                        {
+                                            key: 'verify', title: 'Action', render: (row) => {
+                                                // Smart logic: Cash payments don't need transaction_id or screenshot
+                                                const isCash = row.payment_mode === 'cash';
+                                                const isOnline = row.payment_mode === 'online' || row.payment_mode === 'hybrid';
+                                                const canVerify = isCash || (isOnline && row.transaction_id && row.payment_screenshot_path);
+
+                                                return (
+                                                    <button
+                                                        onClick={() => verifyPayment(row.id)}
+                                                        disabled={!canVerify}
+                                                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title={!canVerify ? 'Online payment requires transaction ID and screenshot' : 'Verify payment'}
+                                                    >
+                                                        ✓ Verify
+                                                    </button>
+                                                );
+                                            }
+                                        }
+                                    ]
+
+                                    return <SmartTable columns={paymentColumns} data={filteredPayments} loading={loadingPayments} emptyMessage={`No ${paymentModeFilter === 'all' ? '' : paymentModeFilter} payments pending.`} />
+                                })()}
                             </div>
                         </div>
                     )}
@@ -391,23 +871,22 @@ export default function CoordinatorEventManage() {
                                     {/* Metrics Grid */}
                                     <div className="space-y-6">
                                         {/* Confirmation Rate */}
-                                        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-gray-500 mb-1">Confirmation Rate</p>
-                                                <h3 className="text-3xl font-bold text-gray-900">
-                                                    {participants.length > 0
-                                                        ? Math.round((participants.filter(p => p.status === 'confirmed').length / participants.length) * 100)
-                                                        : 0}%
-                                                </h3>
-                                                <p className="text-xs text-green-600 mt-1 font-medium flex items-center gap-1">
-                                                    <Check className="h-3 w-3" /> Based on total registrations
-                                                </p>
-                                            </div>
-                                            <div className="h-16 w-16 rounded-full border-4 border-gray-100 border-t-green-500 flex items-center justify-center bg-gray-50">
-                                                <Activity className="h-6 w-6 text-green-600" />
-                                            </div>
+                                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <p className="text-sm text-gray-500 font-medium mb-1">Total Registrations</p>
+                                            <p className="text-3xl font-bold text-gray-900">{loadingParticipants ? '...' : (participants.length || 0)}</p>
                                         </div>
-
+                                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <p className="text-sm text-gray-500 font-medium mb-1">Confirmed</p>
+                                            <p className="text-3xl font-bold text-green-600">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'confirmed').length || 0)}</p>
+                                        </div>
+                                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <p className="text-sm text-gray-500 font-medium mb-1">Pending Payment</p>
+                                            <p className="text-3xl font-bold text-yellow-600">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'pending').length || 0)}</p>
+                                        </div>
+                                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                            <p className="text-sm text-gray-500 font-medium mb-1">Rejected</p>
+                                            <p className="text-3xl font-bold text-red-600">{loadingParticipants ? '...' : (participants.filter(p => p.status === 'rejected').length || 0)}</p>
+                                        </div>
                                         {/* Status Breakdown */}
                                         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Status Distribution</h4>
@@ -438,6 +917,25 @@ export default function CoordinatorEventManage() {
                     )}
                 </div>
             </div>
+
+            {/* Screenshot Viewer Modal */}
+            {screenshotModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setScreenshotModal({ isOpen: false, url: '' })}>
+                    <div className="relative max-w-4xl max-h-[90vh] p-4" onClick={e => e.stopPropagation()}>
+                        <button
+                            onClick={() => setScreenshotModal({ isOpen: false, url: '' })}
+                            className="absolute -top-12 right-0 text-white hover:text-gray-300 transition"
+                        >
+                            <XIcon className="h-8 w-8" />
+                        </button>
+                        <img
+                            src={screenshotModal.url}
+                            alt="Payment Screenshot"
+                            className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
