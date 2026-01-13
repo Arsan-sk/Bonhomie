@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 
 export default function CoordinatorDashboard() {
-    const { user } = useAuth()
+    const { user, profile } = useAuth()
     const [stats, setStats] = useState({
         activeEvents: 0,
         totalParticipants: 0,
@@ -40,22 +40,40 @@ export default function CoordinatorDashboard() {
             let totalRevenue = 0
 
             if (eventIds.length > 0) {
+                // Fetch registrations with event details and team info
                 const { data: registrations, error: regError } = await supabase
                     .from('registrations')
-                    .select('id, event_id, status')
+                    .select(`
+                        *,
+                        event:events(id, fee, name),
+                        profile_id
+                    `)
                     .in('event_id', eventIds)
-                    .eq('status', 'confirmed') // Stats only counting 'confirmed'
+                    .eq('status', 'confirmed')
 
                 if (!regError && registrations) {
                     totalParticipants = registrations.length
 
-                    // Simple revenue calc
+                    // Calculate revenue with team-aware logic (same as AdminAnalytics)
                     registrations.forEach(reg => {
-                        const event = myEvents.find(e => e.id === reg.event_id)
-                        if (event) {
-                            totalRevenue += (event.registration_fee || 0)
+                        const isLeader = reg.team_members && reg.team_members.length > 0;
+
+                        // Check if this registration is a team member (only within same event)
+                        let isTeamMember = false;
+                        if (!isLeader && reg.profile_id && reg.event?.id) {
+                            isTeamMember = registrations.some(otherReg =>
+                                otherReg.event?.id === reg.event.id &&
+                                otherReg.team_members &&
+                                otherReg.team_members.length > 0 &&
+                                otherReg.team_members.some(member => member.id === reg.profile_id)
+                            );
                         }
-                    })
+
+                        // Skip team members - leader pays for all
+                        if (!isTeamMember) {
+                            totalRevenue += (reg.event?.fee || 0);
+                        }
+                    });
                 }
             }
 
@@ -77,19 +95,49 @@ export default function CoordinatorDashboard() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
-            {/* Welcome Section */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute right-0 top-0 h-full w-1/2 bg-white/10 skew-x-12 translate-x-1/2" />
-                <div className="relative z-10">
-                    <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.user_metadata?.full_name?.split(' ')[0] || 'Coordinator'}!</h1>
-                    <p className="text-indigo-100 max-w-xl text-lg">
-                        You have <span className="font-bold text-white underline decoration-wavy underline-offset-4">{stats.activeEvents} active events</span> to manage.
-                        Keep up the great work ensuring smooth operations.
-                    </p>
-                    <div className="mt-8 flex gap-4">
-                        <Link to="/coordinator/events" className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-lg shadow-indigo-900/20 flex items-center gap-2">
-                            Manage Events <ArrowRight className="h-5 w-5" />
-                        </Link>
+            {/* Enhanced Welcome Section with Shortcuts */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 rounded-3xl shadow-2xl">
+                <div className="absolute inset-0 bg-grid-white/10"></div>
+                <div className="relative px-8 py-12">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                        {/* Greeting Section */}
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="text-2xl">👋</span>
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white">
+                                        Welcome back, {profile?.full_name?.split(' ')[0] || 'Coordinator'}!
+                                    </h1>
+                                    <p className="text-purple-100 text-sm mt-1">
+                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-white/90 text-lg max-w-2xl">
+                                Manage your events, track participants, and monitor analytics all in one place. Your dashboard is ready! 🚀
+                            </p>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Link
+                                to="/coordinator/events"
+                                className="group px-6 py-3 bg-white text-indigo-600 rounded-xl font-semibold hover:bg-indigo-50 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
+                            >
+                                <Calendar className="h-5 w-5" />
+                                Manage Events
+                                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                to="/coordinator/analytics"
+                                className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 rounded-xl font-semibold hover:bg-white/20 transition-all duration-200 flex items-center gap-2"
+                            >
+                                <TrendingUp className="h-5 w-5" />
+                                View Analytics
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -358,7 +358,7 @@ export default function CoordinatorEventManage() {
 
             {/* Banner */}
             <div className="h-48 rounded-2xl overflow-hidden relative group">
-                <img src={event.image_url || 'https://via.placeholder.com/1200x300'} alt="" className="w-full h-full object-cover" />
+                <img src={event.image_path || 'https://via.placeholder.com/1200x300'} alt="" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-6 left-6 text-white">
                     <div className="flex items-center gap-4 text-sm font-medium opacity-90">

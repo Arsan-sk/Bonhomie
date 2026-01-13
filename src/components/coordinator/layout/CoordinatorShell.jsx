@@ -21,7 +21,6 @@ export default function CoordinatorShell() {
         { name: 'Browse Events', href: '/coordinator/browse-events', icon: Calendar },
         { name: 'Live Events', href: '/coordinator/live', icon: Activity },
         { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
-        { name: 'Profile', href: '/coordinator/profile', icon: User },
     ]
 
     return (
@@ -36,22 +35,21 @@ export default function CoordinatorShell() {
 
             {/* Sidebar */}
             <aside className={`
-                fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
-                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-purple-600 to-indigo-700 transform transition-transform duration-300 ease-in-out
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
                 <div className="flex flex-col h-full">
-                    {/* Logo Area */}
-                    <div className="h-16 flex items-center px-6 border-b border-gray-100">
-                        <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                            Bonhomie <span className="text-xs font-medium text-gray-500 ml-1">COORD</span>
-                        </span>
-                        <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-gray-400">
+                    {/* Brand */}
+                    <div className="flex items-center h-16 px-6 border-b border-purple-500/30">
+                        <span className="text-xl font-bold tracking-tight text-white">Bonhomie</span>
+                        <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-white/80 hover:text-white">
                             <X className="h-6 w-6" />
                         </button>
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+                    <div className="flex-1 flex flex-col overflow-y-auto px-4 py-4 gap-y-1">
+                        <div className="text-xs font-medium text-purple-200 uppercase tracking-wider mb-2 px-2">Main Menu</div>
                         {navigation.map((item) => {
                             const isActive = location.pathname.startsWith(item.href)
                             return (
@@ -60,43 +58,47 @@ export default function CoordinatorShell() {
                                     to={item.href}
                                     onClick={() => setSidebarOpen(false)}
                                     className={`
-                                        flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200
+                                        group flex items-center gap-x-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200
                                         ${isActive
-                                            ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+                                            ? 'bg-white text-purple-700 shadow-lg shadow-purple-900/20'
+                                            : 'text-purple-100 hover:bg-purple-500/30 hover:text-white'}
                                     `}
                                 >
-                                    <item.icon className={`h-5 w-5 mr-3 ${isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                                    <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-purple-600' : 'text-purple-300 group-hover:text-white'}`} />
                                     {item.name}
                                 </NavLink>
                             )
                         })}
-                    </nav>
+                    </div>
 
-                    {/* User Profile & Logout */}
-                    <div className="p-4 border-t border-gray-100">
-                        <div className="flex items-center gap-3 px-4 py-3 mb-2">
-                            <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                    {/* User Profile (Bottom) */}
+                    <div className="p-4 border-t border-purple-600">
+                        <div className="flex items-center gap-x-3">
+                            <button
+                                onClick={() => navigate('/coordinator/profile')}
+                                className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-purple-700 font-bold shadow-lg hover:scale-110 transition"
+                                title="View Profile"
+                            >
                                 {profile?.full_name?.[0] || 'C'}
-                            </div>
+                            </button>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{profile?.full_name}</p>
-                                <p className="text-xs text-gray-500 truncate">Event Coordinator</p>
+                                <p className="text-sm font-medium text-white truncate">{profile?.full_name || 'Coordinator'}</p>
+                                <p className="text-xs text-purple-200 truncate">{profile?.college_email || 'coordinator@bonhomie.com'}</p>
                             </div>
+                            <button
+                                onClick={handleSignOut}
+                                className="text-purple-200 hover:text-red-300 transition-colors"
+                                title="Sign Out"
+                            >
+                                <LogOut className="h-5 w-5" />
+                            </button>
                         </div>
-                        <button
-                            onClick={handleSignOut}
-                            className="flex w-full items-center px-4 py-2 text-sm font-medium text-red-600 rounded-xl hover:bg-red-50 transition-colors"
-                        >
-                            <LogOut className="h-5 w-5 mr-3" />
-                            Sign Out
-                        </button>
                     </div>
                 </div>
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden lg:pl-64">
                 {/* Mobile Header */}
                 <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
                     <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-md">

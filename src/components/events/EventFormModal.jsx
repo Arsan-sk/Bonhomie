@@ -10,20 +10,21 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
         description: '',
         category: 'Technical',
         day_number: 1,
+        date: '',
         start_time: '',
-        end_time: '',
         venue: '',
         min_team_size: 1,
         max_team_size: 1,
         subcategory: 'Individual',
         registration_fee: 0,
-        mode: 'offline',
         upi_id: '',
-        image_url: '',
+        image_path: '',
         payment_mode: 'hybrid',
         qr_code_path: '',
         rules: ''
     })
+    const [coverImageUrl, setCoverImageUrl] = useState('')
+    const [uploadingCover, setUploadingCover] = useState(false)
 
     const [globalSettings, setGlobalSettings] = useState(null)
     const [festDays, setFestDays] = useState([])
@@ -44,20 +45,20 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                 description: '',
                 category: 'Technical',
                 day_number: 1,
+                date: '',
                 start_time: '',
-                end_time: '',
                 venue: '',
                 min_team_size: 1,
                 max_team_size: 1,
                 subcategory: 'Individual',
                 registration_fee: 0,
-                mode: 'offline',
                 upi_id: '',
-                image_url: '',
+                image_path: '',
                 payment_mode: 'hybrid',
                 qr_code_path: '',
                 rules: ''
             })
+            setCoverImageUrl('')
         }
     }, [initialData, isOpen])
 
@@ -88,6 +89,52 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                 { number: 2, label: 'Day 2' },
                 { number: 3, label: 'Day 3' }
             ])
+        }
+    }
+
+    const handleCoverImageUpload = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size must be less than 5MB')
+            return
+        }
+
+        setUploadingCover(true)
+        try {
+            const fileExt = file.name.split('.').pop()
+            const fileName = `event-covers/${Date.now()}.${fileExt}`
+
+            const { data, error } = await supabase.storage
+                .from('event-assets')
+                .upload(fileName, file)
+
+            if (error) throw error
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('event-assets')
+                .getPublicUrl(fileName)
+
+            setFormData({ ...formData, image_path: publicUrl })
+            setCoverImageUrl(publicUrl)
+        } catch (error) {
+            console.error('Error uploading cover image:', error)
+            alert('Failed to upload image. Please try again.')
+        } finally {
+            setUploadingCover(false)
+        }
+    }
+
+    const handleDayChange = async (selectedDay) => {
+        // Auto-fetch date from global_settings
+        if (globalSettings) {
+            const dayDate = new Date(globalSettings.fest_start_date)
+            dayDate.setDate(dayDate.getDate() + (Number(selectedDay) - 1))
+            const formattedDate = dayDate.toISOString().split('T')[0]
+            setFormData({ ...formData, day_number: selectedDay, date: formattedDate })
+        } else {
+            setFormData({ ...formData, day_number: selectedDay })
         }
     }
 
@@ -151,18 +198,18 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
             <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={onClose} />
 
             <div className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl flex flex-col">
-                {/* Header */}
-                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center">
+                {/* Header - Purple Theme */}
+                <div className="px-8 py-6 bg-gradient-to-r from-purple-600 to-indigo-600 border-b border-purple-500/30 flex justify-between items-center">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-900">
+                        <h3 className="text-xl font-bold text-white">
                             {initialData ? 'Edit Event' : 'Create New Event'}
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-purple-100 mt-1">
                             {initialData ? initialData.name : 'Fill in all event details'}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-                        <X className="h-6 w-6 text-gray-400" />
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                        <X className="h-6 w-6 text-white" />
                     </button>
                 </div>
 
@@ -211,7 +258,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                             <AdminSelect
                                 label="Day"
                                 value={formData.day_number}
-                                onChange={e => setFormData({ ...formData, day_number: e.target.value })}
+                                onChange={e => handleDayChange(e.target.value)}
                             >
                                 {festDays.map(day => (
                                     <option key={day.number} value={day.number}>
@@ -228,16 +275,6 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                                 type="time"
                                 value={formData.start_time}
                                 onChange={e => setFormData({ ...formData, start_time: e.target.value })}
-                            />
-                        </div>
-
-                        {/* End Time */}
-                        <div>
-                            <AdminInput
-                                label="End Time"
-                                type="time"
-                                value={formData.end_time}
-                                onChange={e => setFormData({ ...formData, end_time: e.target.value })}
                             />
                         </div>
 
@@ -275,41 +312,53 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                             </>
                         )}
 
-                        {/* Registration Fee */}
-                        <div>
-                            <AdminInput
-                                label="Registration Fee (₹)"
-                                type="number"
-                                value={formData.registration_fee}
-                                onChange={e => setFormData({ ...formData, registration_fee: e.target.value })}
-                            />
-                        </div>
+                        {/* Cover Image - Upload or URL */}
+                        <div className="col-span-2">
+                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Cover Image</label>
+                            <div className="space-y-4">
+                                <div className="border-2 border-dashed border-gray-300 rounded-xl p-4">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleCoverImageUpload}
+                                        className="hidden"
+                                        id="cover-upload-coord"
+                                    />
+                                    <label htmlFor="cover-upload-coord" className="cursor-pointer">
+                                        <div className="flex flex-col items-center">
+                                            <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                                            <p className="text-sm text-gray-600">Click to upload cover image</p>
+                                            <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</p>
+                                        </div>
+                                    </label>
+                                    {uploadingCover && (
+                                        <div className="flex items-center justify-center mt-2">
+                                            <div className="h-5 w-5 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                            <span className="ml-2 text-sm text-gray-600">Uploading...</span>
+                                        </div>
+                                    )}
+                                </div>
 
-                        {/* Mode */}
-                        <div>
-                            <AdminSelect
-                                label="Mode"
-                                value={formData.mode}
-                                onChange={e => setFormData({ ...formData, mode: e.target.value })}
-                            >
-                                <option value="offline">Offline</option>
-                                <option value="online">Online</option>
-                                <option value="hybrid">Hybrid</option>
-                            </AdminSelect>
-                        </div>
+                                <div className="text-center text-gray-500 text-sm">OR</div>
 
-                        {/* UPI ID - Only for hybrid/online */}
-                        {(formData.payment_mode === 'hybrid' || formData.payment_mode === 'online') && (
-                            <div className="col-span-2">
-                                <AdminInput
-                                    label="UPI ID (for payments)"
-                                    placeholder="example@oksbi"
-                                    value={formData.upi_id}
-                                    onChange={e => setFormData({ ...formData, upi_id: e.target.value })}
-                                    required
+                                <input
+                                    type="url"
+                                    value={coverImageUrl}
+                                    onChange={(e) => {
+                                        setCoverImageUrl(e.target.value)
+                                        setFormData({ ...formData, image_path: e.target.value })
+                                    }}
+                                    placeholder="Paste image URL"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
                                 />
+
+                                {(formData.image_path || coverImageUrl) && (
+                                    <div className="mt-2">
+                                        <img src={formData.image_path || coverImageUrl} alt="Preview" className="h-32 w-full object-cover rounded-lg" />
+                                    </div>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Payment Mode */}
                         <div className="col-span-2">
@@ -323,7 +372,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                                         type="button"
                                         onClick={() => setFormData({ ...formData, payment_mode: mode })}
                                         className={`px-4 py-2 rounded-lg text-sm font-medium transition ${formData.payment_mode === mode
-                                            ? 'bg-indigo-600 text-white'
+                                            ? 'bg-purple-600 text-white'
                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                             }`}
                                     >
@@ -335,58 +384,18 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                             </div>
                         </div>
 
-                        {/* QR Code Upload */}
+                        {/* UPI ID - Conditional */}
                         {(formData.payment_mode === 'hybrid' || formData.payment_mode === 'online') && (
                             <div className="col-span-2">
-                                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                                    Payment QR Code
-                                </label>
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleQRUpload}
-                                        className="hidden"
-                                        id="qr-upload"
-                                    />
-                                    {formData.qr_code_path ? (
-                                        <div className="flex items-center gap-4">
-                                            <img
-                                                src={formData.qr_code_path}
-                                                alt="QR"
-                                                className="h-32 w-32 object-contain border rounded"
-                                            />
-                                            <div>
-                                                <p className="text-sm text-green-600 font-medium">QR Code uploaded</p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, qr_code_path: '' })}
-                                                    className="text-xs text-red-600 hover:text-red-700 mt-1"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <label htmlFor="qr-upload" className="cursor-pointer">
-                                            <div className="flex flex-col items-center">
-                                                <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                                                <p className="text-sm text-gray-600">Click to upload QR code</p>
-                                                <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</p>
-                                            </div>
-                                        </label>
-                                    )}
-                                </div>
+                                <AdminInput
+                                    label={`UPI ID ${formData.payment_mode === 'online' ? '(Required)' : '(Optional)'}`}
+                                    placeholder="example@oksbi"
+                                    value={formData.upi_id}
+                                    onChange={e => setFormData({ ...formData, upi_id: e.target.value })}
+                                    required={formData.payment_mode === 'online'}
+                                />
                             </div>
                         )}
-
-                        {/* Cover Image */}
-                        <div className="col-span-2">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                                Cover Image
-                            </label>
-                            <UnsplashPicker onSelect={url => setFormData({ ...formData, image_url: url })} />
-                        </div>
 
                         {/* Description */}
                         <div className="col-span-2">
@@ -424,7 +433,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                     <button
                         onClick={handleSubmit}
                         disabled={saving || !formData.name}
-                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                     >
                         {saving ? 'Saving...' : initialData ? 'Update Event' : 'Create Event'}
                     </button>

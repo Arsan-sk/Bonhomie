@@ -28,7 +28,6 @@ export default function StudentShell() {
         { name: 'Events', href: '/student/events', icon: Calendar },
         { name: 'Live Events', href: '/student/live', icon: Activity },
         { name: 'My Events', href: '/student/my-events', icon: Trophy },
-        { name: 'Profile', href: '/student/profile', icon: User },
     ]
 
     const isActive = (path) => location.pathname === path
@@ -49,27 +48,20 @@ export default function StudentShell() {
                     }`}
             >
                 <div className="flex flex-col h-full">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-5 border-b border-purple-500/30">
-                        <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-                                <span className="text-white font-bold text-lg">B</span>
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-white tracking-tight">Bonhomie</h1>
-                                <p className="text-xs text-purple-200">Student Portal</p>
-                            </div>
-                        </div>
+                    {/* Brand */}
+                    <div className="flex items-center h-16 px-6 bg-gradient-to-r from-purple-700 to-indigo-700 border-b border-purple-600">
+                        <span className="text-xl font-bold tracking-tight text-white">Bonhomie</span>
                         <button
                             onClick={() => setSidebarOpen(false)}
-                            className="lg:hidden text-white hover:text-purple-200"
+                            className="ml-auto lg:hidden text-white/80 hover:text-white"
                         >
                             <X className="h-6 w-6" />
                         </button>
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+                    <div className="flex-1 flex flex-col overflow-y-auto px-4 py-4 gap-y-1">
+                        <div className="text-xs font-medium text-purple-200 uppercase tracking-wider mb-2 px-2">Main Menu</div>
                         {navigation.map((item) => {
                             const Icon = item.icon
                             const active = isActive(item.href)
@@ -78,40 +70,40 @@ export default function StudentShell() {
                                     key={item.name}
                                     to={item.href}
                                     onClick={() => setSidebarOpen(false)}
-                                    className={`flex items-center px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${active
+                                    className={`group flex items-center gap-x-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${active
                                             ? 'bg-white text-purple-700 shadow-lg shadow-purple-900/20'
                                             : 'text-purple-100 hover:bg-purple-500/30 hover:text-white'
                                         }`}
                                 >
-                                    <Icon className={`h-5 w-5 mr-3 ${active ? 'text-purple-600' : 'text-purple-300'}`} />
+                                    <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-purple-600' : 'text-purple-300 group-hover:text-white'}`} />
                                     {item.name}
                                 </Link>
                             )
                         })}
-                    </nav>
+                    </div>
 
-                    {/* User Profile */}
-                    <div className="px-4 py-4 border-t border-purple-500/30">
-                        <div className="flex items-center px-4 py-3 bg-purple-500/20 rounded-xl">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-300 to-pink-300 flex items-center justify-center">
-                                <span className="text-purple-700 font-bold text-sm">
-                                    {profile?.full_name?.charAt(0) || 'S'}
-                                </span>
+                    {/* User Profile (Bottom) */}
+                    <div className="p-4 border-t border-purple-600">
+                        <div className="flex items-center gap-x-3">
+                            <button
+                                onClick={() => navigate('/student/profile')}
+                                className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-purple-700 font-bold shadow-lg hover:scale-110 transition"
+                                title="View Profile"
+                            >
+                                {profile?.full_name?.charAt(0) || 'S'}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white truncate">{profile?.full_name || 'Student'}</p>
+                                <p className="text-xs text-purple-200 truncate">{profile?.college_email || 'student@bonhomie.com'}</p>
                             </div>
-                            <div className="ml-3 flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">
-                                    {profile?.full_name || 'Student'}
-                                </p>
-                                <p className="text-xs text-purple-200 truncate">Participant</p>
-                            </div>
+                            <button
+                                onClick={handleSignOut}
+                                className="text-purple-200 hover:text-red-300 transition-colors"
+                                title="Sign Out"
+                            >
+                                <LogOut className="h-5 w-5" />
+                            </button>
                         </div>
-                        <button
-                            onClick={handleSignOut}
-                            className="w-full mt-3 flex items-center justify-center px-4 py-2.5 bg-red-500/90 hover:bg-red-600 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-                        >
-                            <LogOut className="h-4 w-4 mr-2" />
-                            Logout
-                        </button>
                     </div>
                 </div>
             </div>

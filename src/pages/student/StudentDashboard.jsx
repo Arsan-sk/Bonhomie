@@ -77,47 +77,106 @@ export default function StudentDashboard() {
     const ongoingEvents = registrations.filter(reg => {
         return reg.event?.status === 'live' || reg.event?.status === 'ongoing'
     })
-
     if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">My Dashboard</h1>
-                <p className="mt-2 text-gray-600">Welcome back, {profile?.full_name}</p>
+            {/* Enhanced Welcome Section with Shortcuts */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-500 rounded-3xl shadow-2xl mb-8">
+                <div className="absolute inset-0 bg-grid-white/10"></div>
+                <div className="relative px-8 py-12">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                        {/* Greeting Section */}
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                    <span className="text-2xl">🎉</span>
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white">
+                                        Welcome back, {profile?.full_name?.split(' ')[0] || 'Student'}!
+                                    </h1>
+                                    <p className="text-purple-100 text-sm mt-1">
+                                        {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-white/90 text-lg max-w-2xl">
+                                You're registered for <span className="font-bold text-white">{registrations.length} events</span>! Keep exploring, participating, and winning. Your festival journey awaits! 🏆
+                            </p>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Link
+                                to="/student/events"
+                                className="group px-6 py-3 bg-white text-purple-600 rounded-xl font-semibold hover:bg-purple-50 transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
+                            >
+                                <Calendar className="h-5 w-5" />
+                                Browse Events
+                            </Link>
+                            <Link
+                                to="/student/my-events"
+                                className="px-6 py-3 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 rounded-xl font-semibold hover:bg-white/20 transition-all duration-200 flex items-center gap-2"
+                            >
+                                <Activity className="h-5 w-5" />
+                                My Events
+                            </Link>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard
-                    title="Registered Events"
-                    value={registrations.length}
-                    icon={Calendar}
-                    color="purple"
-                />
-                <StatCard
-                    title="Upcoming Events"
-                    value={upcomingEvents.length}
-                    icon={Clock}
-                    color="blue"
-                />
-                <StatCard
-                    title="Ongoing Events"
-                    value={ongoingEvents.length}
-                    icon={Activity}
-                    color="green"
-                />
-                <StatCard
-                    title="Certificates"
-                    value={certificates.length}
-                    icon={Award}
-                    color="yellow"
-                />
+                <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                            <Calendar className="h-6 w-6" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total</span>
+                    </div>
+                    <h3 className="text-3xl font-bold text-gray-900">{registrations.length}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Registered Events</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <Clock className="h-6 w-6" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Upcoming</span>
+                    </div>
+                    <h3 className="text-3xl font-bold text-gray-900">{upcomingEvents.length}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Upcoming Events</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-green-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-green-50 text-green-600 rounded-xl group-hover:bg-green-600 group-hover:text-white transition-colors">
+                            <Activity className="h-6 w-6" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Live</span>
+                    </div>
+                    <h3 className="text-3xl font-bold text-gray-900">{ongoingEvents.length}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Ongoing Events</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-yellow-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl group-hover:bg-yellow-600 group-hover:text-white transition-colors">
+                            <Award className="h-6 w-6" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Earned</span>
+                    </div>
+                    <h3 className="text-3xl font-bold text-gray-900">{certificates.length}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Certificates</p>
+                </div>
             </div>
 
             {/* Notifications Section */}
             {notifications.length > 0 && (
-                <div className="mb-8 bg-white shadow overflow-hidden sm:rounded-lg">
+                <div className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 shadow-sm overflow-hidden rounded-2xl">
                     <div className="px-4 py-5 sm:px-6 flex items-center">
                         <Bell className="h-5 w-5 text-gray-400 mr-2" />
                         <h3 className="text-lg leading-6 font-medium text-gray-900">Notifications</h3>
@@ -134,7 +193,7 @@ export default function StudentDashboard() {
             )}
 
             {/* Certificates Section */}
-            <div className="mb-8 bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="mb-8 bg-white shadow-sm overflow-hidden rounded-2xl border border-gray-100">
                 <div className="px-4 py-5 sm:px-6 flex items-center">
                     <Award className="h-5 w-5 text-primary mr-2" />
                     <h3 className="text-lg leading-6 font-medium text-gray-900">My Certificates</h3>
@@ -163,7 +222,7 @@ export default function StudentDashboard() {
                 </div>
             </div>
 
-            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="bg-white shadow-sm overflow-hidden rounded-2xl border border-gray-100">
                 <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
                     <h3 className="text-lg leading-6 font-medium text-gray-900">My Registrations</h3>
                     <Link to="/events" className="text-sm text-primary hover:text-blue-700 font-medium">

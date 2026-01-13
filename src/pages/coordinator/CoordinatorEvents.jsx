@@ -3,7 +3,7 @@ import { Plus, Search, Calendar, MapPin, Users, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { Link } from 'react-router-dom'
-import EventFormModal from '../../components/events/EventFormModal'
+import EventForm from '../../components/events/EventForm'
 
 export default function CoordinatorEvents() {
     const { user } = useAuth()
@@ -73,7 +73,7 @@ export default function CoordinatorEvents() {
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col h-full">
             <div className="h-48 overflow-hidden relative">
                 <img
-                    src={event.image_url || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80'}
+                    src={event.image_path || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80'}
                     alt={event.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
@@ -163,10 +163,11 @@ export default function CoordinatorEvents() {
             )}
 
             {/* Event Form Modal */}
-            <EventFormModal
+            <EventForm
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={handleCreateEvent}
+                role="coordinator"
             />
         </div>
     )
