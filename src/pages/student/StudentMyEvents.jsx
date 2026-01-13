@@ -168,7 +168,7 @@ export default function StudentMyEvents() {
                                 {/* Action Button */}
                                 <div className="mt-4">
                                     <a
-                                        href={`${eventsBasePath.replace('/browse-events', '')}/ events/${registration.event.id}`}
+                                        href={isCoordinator ? `/coordinator/browse-events/${registration.event.id}` : `/student/events/${registration.event.id}`}
                                         className="block w-full text-center px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium text-sm transition-colors"
                                     >
                                         View Event Details

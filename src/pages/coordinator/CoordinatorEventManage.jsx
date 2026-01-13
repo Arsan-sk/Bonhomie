@@ -407,7 +407,7 @@ export default function CoordinatorEventManage() {
                                 <div><h3 className="text-lg font-bold text-gray-900">Participants</h3><p className="text-sm text-gray-500">Manage individuals and teams.</p></div>
                                 <div className="flex gap-2">
                                     {/* Members Only Toggle (Group Events Only) */}
-                                    {event?.subcategory === 'group' && (
+                                    {event?.subcategory?.toLowerCase() === 'group' && (
                                         <button
                                             onClick={() => setShowMembersOnly(!showMembersOnly)}
                                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${showMembersOnly
@@ -429,7 +429,7 @@ export default function CoordinatorEventManage() {
                             ) : (
                                 <div className="space-y-2">
                                     {(() => {
-                                        const isGroupEvent = event?.subcategory === 'group';
+                                        const isGroupEvent = event?.subcategory?.toLowerCase() === 'group';
 
                                         let displayParticipants;
 
