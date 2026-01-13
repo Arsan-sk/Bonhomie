@@ -19,18 +19,48 @@ export default function AdminDashboard() {
 
     const fetchStats = async () => {
         try {
-            const [eventsRes, regsRes, paymentsRes] = await Promise.all([
+            const [eventsRes, regsRes, revenueRes] = await Promise.all([
                 supabase.from('events').select('*', { count: 'exact' }),
                 supabase.from('registrations').select('*', { count: 'exact' }).eq('status', 'confirmed'),
-                supabase.from('payments').select('amount').eq('status', 'confirmed')
+                // Revenue calculation - match AdminAnalytics logic
+                supabase
+                    .from('registrations')
+                    .select(`
+                        *,
+                        event:events(id, fee, name),
+                        profile_id
+                    `)
+                    .eq('status', 'confirmed')
             ])
 
-            const revenue = paymentsRes.data?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+            // Calculate revenue with team-aware logic (same as AdminAnalytics)
+            let totalRevenue = 0;
+            const data = revenueRes.data || [];
+
+            data.forEach(reg => {
+                const isLeader = reg.team_members && reg.team_members.length > 0;
+
+                // Check if this registration is a team member (only within same event)
+                let isTeamMember = false;
+                if (!isLeader && reg.profile_id && reg.event?.id) {
+                    isTeamMember = data.some(otherReg =>
+                        otherReg.event?.id === reg.event.id &&
+                        otherReg.team_members &&
+                        otherReg.team_members.length > 0 &&
+                        otherReg.team_members.some(member => member.id === reg.profile_id)
+                    );
+                }
+
+                // Skip team members - leader pays for all
+                if (!isTeamMember) {
+                    totalRevenue += (reg.event?.fee || 0);
+                }
+            });
 
             setStats({
                 totalEvents: eventsRes.count || 0,
                 activeRegistrations: regsRes.count || 0,
-                totalRevenue: revenue,
+                totalRevenue: totalRevenue,
                 todaysEvents: 0,
                 pendingRefunds: 0
             })

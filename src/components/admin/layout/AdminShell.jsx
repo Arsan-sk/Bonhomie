@@ -79,9 +79,14 @@ export default function AdminShell() {
                 {/* User Profile (Bottom) */}
                 <div className="p-4 border-t border-slate-800 bg-slate-950">
                     <div className="flex items-center gap-x-3">
-                        <div className="h-9 w-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                            {user?.email?.[0].toUpperCase()}
-                        </div>
+                        {/* Avatar */}
+                        <button
+                            onClick={() => navigate('/admin/profile')}
+                            className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold shadow-lg hover:scale-110 transition"
+                            title="View Profile"
+                        >
+                            {user?.email?.[0]?.toUpperCase() || 'A'}
+                        </button>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-white truncate">{user?.email}</p>
                             <p className="text-xs text-slate-500 truncate">Administrator</p>
