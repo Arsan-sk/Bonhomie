@@ -13,17 +13,31 @@ export default function Events() {
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
+    const [festSettings, setFestSettings] = useState(null)
 
     useEffect(() => {
+        fetchFestSettings()
         fetchEvents()
     }, [])
+
+    const fetchFestSettings = async () => {
+        try {
+            const { data } = await supabase
+                .from('global_settings')
+                .select('*')
+                .single()
+            setFestSettings(data)
+        } catch (error) {
+            console.error('Error fetching fest settings:', error)
+        }
+    }
 
     const fetchEvents = async () => {
         try {
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
-                .order('day_order', { ascending: true })
+                .order('day_number', { ascending: true })
                 .order('start_time', { ascending: true })
 
             if (error) throw error
@@ -49,7 +63,7 @@ export default function Events() {
                 <div className="text-center">
                     <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Event Schedule</h2>
                     <p className="mt-4 text-lg text-gray-500">
-                        Explore the exciting lineup of events for Bonhomei.
+                        Explore the exciting lineup of events for {festSettings?.fest_name || 'Bonhomie'}.
                     </p>
                 </div>
 

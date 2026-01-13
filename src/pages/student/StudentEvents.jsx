@@ -7,23 +7,40 @@ import clsx from 'clsx'
 const CATEGORIES = ['All', 'Cultural', 'Technical', 'Sports']
 const SUBCATEGORIES = ['All', 'Individual', 'Group']
 
-export default function Events() {
+export default function StudentEvents({ baseUrl = '/student/events' }) {
     const [selectedCategory, setSelectedCategory] = useState('All')
     const [selectedSubcategory, setSelectedSubcategory] = useState('All')
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
+    const [activeFilter, setActiveFilter] = useState('all')
+    const [festSettings, setFestSettings] = useState(null)
 
     useEffect(() => {
+        fetchFestSettings()
         fetchEvents()
     }, [])
+
+    const fetchFestSettings = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('fest_settings')
+                .select('*')
+                .single()
+
+            if (error) throw error
+            setFestSettings(data)
+        } catch (error) {
+            console.error('Error fetching fest settings:', error)
+        }
+    }
 
     const fetchEvents = async () => {
         try {
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
-                .order('day_order', { ascending: true })
+                .order('day_number', { ascending: true })
                 .order('start_time', { ascending: true })
 
             if (error) throw error
@@ -114,7 +131,7 @@ export default function Events() {
                     ) : filteredEvents.length > 0 ? (
                         <div className="grid gap-8 mx-auto mt-8 sm:grid-cols-2 lg:grid-cols-3">
                             {filteredEvents.map((event) => (
-                                <EventCard key={event.id} event={event} />
+                                <EventCard key={event.id} event={event} baseUrl={baseUrl} />
                             ))}
                         </div>
                     ) : (

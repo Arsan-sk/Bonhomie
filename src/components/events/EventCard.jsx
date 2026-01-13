@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Calendar, MapPin, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 
-export default function EventCard({ event }) {
+export default function EventCard({ event, baseUrl = '/events' }) {
     return (
         <div className="flex flex-col overflow-hidden rounded-lg shadow-lg bg-white hover:shadow-xl transition-shadow duration-300">
             <div className="flex-shrink-0">
@@ -23,7 +23,7 @@ export default function EventCard({ event }) {
                             {event.subcategory}
                         </span>
                     </div>
-                    <Link to={`/events/${event.id}`} className="mt-2 block">
+                    <Link to={`${baseUrl}/${event.id}`} className="mt-2 block">
                         <p className="text-xl font-semibold text-gray-900">{event.name}</p>
                         <p className="mt-3 text-base text-gray-500 line-clamp-3">{event.description}</p>
                     </Link>
@@ -44,7 +44,7 @@ export default function EventCard({ event }) {
                 </div>
                 <div className="mt-6">
                     <Link
-                        to={`/events/${event.id}`}
+                        to={`${baseUrl}/${event.id}`}
                         className="flex w-full items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
                     >
                         View Details

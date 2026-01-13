@@ -3,12 +3,14 @@ import { Plus, Search, Calendar, MapPin, Users, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { Link } from 'react-router-dom'
+import EventFormModal from '../../components/events/EventFormModal'
 
 export default function CoordinatorEvents() {
     const { user } = useAuth()
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
+    const [isModalOpen, setIsModalOpen] = useState(false)
 
     useEffect(() => {
         if (user) fetchMyEvents()
@@ -17,23 +19,49 @@ export default function CoordinatorEvents() {
     const fetchMyEvents = async () => {
         setLoading(true)
         try {
-            // Fetch events where user is assigned OR created
-            // 1. Assignments
+            // Fetch events where user is assigned
             const { data: assignments } = await supabase
                 .from('event_assignments')
                 .select('event:events(*)')
                 .eq('coordinator_id', user.id)
 
-            // 2. Created (if schema supports creator_id, if not just assignments for now)
-            // Assuming assignments is the main way.
-
             const myEvents = assignments?.map(a => a.event) || []
-            // Deduplicate if needed
             setEvents(myEvents)
         } catch (error) {
             console.error('Error fetching events:', error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleCreateEvent = async (eventData) => {
+        try {
+            // 1. Create event in events table (same table for all events)
+            const { data: newEvent, error: eventError } = await supabase
+                .from('events')
+                .insert([eventData])
+                .select()
+                .single()
+
+            if (eventError) throw eventError
+
+            // 2. Auto-assign to coordinator
+            const { error: assignError } = await supabase
+                .from('event_assignments')
+                .insert([{
+                    event_id: newEvent.id,
+                    coordinator_id: user.id
+                }])
+
+            if (assignError) throw assignError
+
+            // 3. Refresh event list
+            await fetchMyEvents()
+            alert('Event created successfully!')
+        } catch (error) {
+            console.error('Error creating event:', error)
+            alert('Failed to create event: ' + error.message)
+            throw error
         }
     }
 
@@ -106,8 +134,11 @@ export default function CoordinatorEvents() {
                             className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-sm transition-all"
                         />
                     </div>
-                    {/* Create Event Button - Could open Modal similar to Admin */}
-                    <button className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 font-semibold shadow-md shadow-indigo-100 transition-all hover:scale-105 active:scale-95">
+                    {/* Create Event Button */}
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 font-semibold shadow-md shadow-indigo-100 transition-all hover:scale-105 active:scale-95"
+                    >
                         <Plus className="h-5 w-5" /> New Event
                     </button>
                 </div>
@@ -130,6 +161,13 @@ export default function CoordinatorEvents() {
                     ))}
                 </div>
             )}
+
+            {/* Event Form Modal */}
+            <EventFormModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSubmit={handleCreateEvent}
+            />
         </div>
     )
 }

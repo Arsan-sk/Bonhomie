@@ -14,13 +14,14 @@ export default function AdminEvents() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [activeTab, setActiveTab] = useState('details') // 'details', 'coordinators'
     const [editingEvent, setEditingEvent] = useState(null)
+    const [uploadingQR, setUploadingQR] = useState(false)
 
     // Form Data
     const [formData, setFormData] = useState({
         name: '', description: '', date: '', time: '', venue: '',
         category: 'Technical', team_size: 1, max_team_size: 1, registration_fee: 0,
-        image_url: '', day: 'Day 1', mode: 'offline',
-        upi_id: '', rules: ''
+        image_url: '', day_number: 1, mode: 'offline',
+        upi_id: '', rules: '', payment_mode: 'hybrid', qr_code_path: ''
     })
 
     // Coordinator State
@@ -29,14 +30,53 @@ export default function AdminEvents() {
     const [selectedCoordinatorId, setSelectedCoordinatorId] = useState('')
     const [assigning, setAssigning] = useState(false)
 
+    // Global Settings State
+    const [globalSettings, setGlobalSettings] = useState(null)
+    const [festDays, setFestDays] = useState([])
+
     useEffect(() => {
         fetchEvents()
         fetchAvailableCoordinators()
+        fetchGlobalSettings()
     }, [])
+
+    const fetchGlobalSettings = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('global_settings')
+                .select('*')
+                .single()
+
+            if (error) throw error
+
+            if (data) {
+                setGlobalSettings(data)
+                // Generate fest days array
+                const days = []
+                for (let i = 1; i <= data.fest_duration_days; i++) {
+                    const dayDate = new Date(data.fest_start_date)
+                    dayDate.setDate(dayDate.getDate() + (i - 1))
+                    days.push({
+                        number: i,
+                        label: `Day ${i} (${dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
+                    })
+                }
+                setFestDays(days)
+            }
+        } catch (error) {
+            console.error('Error fetching global settings:', error)
+            // Fallback to default 3 days
+            setFestDays([
+                { number: 1, label: 'Day 1' },
+                { number: 2, label: 'Day 2' },
+                { number: 3, label: 'Day 3' }
+            ])
+        }
+    }
 
     const fetchEvents = async () => {
         setLoading(true)
-        const { data, error } = await supabase.from('events').select('*').order('day_order', { ascending: true })
+        const { data, error } = await supabase.from('events').select('*').order('day_number', { ascending: true })
         if (error) console.error(error)
         else setEvents(data || [])
         setLoading(false)
@@ -67,7 +107,7 @@ export default function AdminEvents() {
             setEditingEvent(event)
             setFormData({
                 ...event,
-                day: event.day || 'Day 1',
+                day_number: event.day_number || 1,
                 rules: event.rules || '',
                 min_team_size: event.min_team_size || 1,
                 max_team_size: event.max_team_size || 1
@@ -78,7 +118,8 @@ export default function AdminEvents() {
             setFormData({
                 name: '', description: '', date: '', time: '', venue: '',
                 category: 'Technical', team_size: 1, max_team_size: 1, registration_fee: 0,
-                image_url: '', day: 'Day 1', mode: 'offline', upi_id: '', rules: ''
+                image_url: '', day_number: 1, mode: 'offline', upi_id: '', rules: '',
+                payment_mode: 'hybrid', qr_code_path: ''
             })
             setAssignments([])
         }
@@ -86,14 +127,17 @@ export default function AdminEvents() {
 
     const handleSaveEvent = async (e) => {
         e.preventDefault()
-        const dayOrderMap = { 'Day 1': 1, 'Day 2': 2, 'Day 3': 3 }
         const payload = {
             ...formData,
-            day_order: dayOrderMap[formData.day] || 1,
+            day_number: Number(formData.day_number),
             min_team_size: Number(formData.min_team_size),
             max_team_size: Number(formData.max_team_size),
             registration_fee: Number(formData.registration_fee)
         }
+
+        // Remove old fields if they exist
+        delete payload.day
+        delete payload.day_order
 
         let eventId = editingEvent?.id
 
@@ -117,6 +161,42 @@ export default function AdminEvents() {
         await supabase.from('events').delete().eq('id', editingEvent.id)
         setIsModalOpen(false)
         fetchEvents()
+    }
+
+    const handleQRUpload = async (e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size must be less than 5MB')
+            return
+        }
+
+        setUploadingQR(true)
+        try {
+            const fileExt = file.name.split('.').pop()
+            const fileName = `event-qr/${Date.now()}.${fileExt}`
+
+            // Upload to Supabase storage
+            const { data, error } = await supabase.storage
+                .from('event-assets')
+                .upload(fileName, file)
+
+            if (error) throw error
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('event-assets')
+                .getPublicUrl(fileName)
+
+            setFormData({ ...formData, qr_code_path: publicUrl })
+        } catch (error) {
+            console.error('Error uploading QR code:', error)
+            alert('Failed to upload QR code. Please try again.')
+        } finally {
+            setUploadingQR(false)
+        }
     }
 
     const handleAssignCoordinator = async () => {
@@ -254,8 +334,16 @@ export default function AdminEvents() {
                                         </div>
 
                                         <div>
-                                            <AdminSelect label="Day" value={formData.day} onChange={e => setFormData({ ...formData, day: e.target.value })}>
-                                                <option>Day 1</option><option>Day 2</option><option>Day 3</option>
+                                            <AdminSelect
+                                                label="Day"
+                                                value={formData.day_number}
+                                                onChange={e => setFormData({ ...formData, day_number: e.target.value })}
+                                            >
+                                                {festDays.map(day => (
+                                                    <option key={day.number} value={day.number}>
+                                                        {day.label}
+                                                    </option>
+                                                ))}
                                             </AdminSelect>
                                         </div>
 
@@ -298,6 +386,79 @@ export default function AdminEvents() {
                                             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Cover Image</label>
                                             <UnsplashPicker onSelect={(url) => setFormData({ ...formData, image_url: url })} />
                                         </div>
+
+                                        {/* Payment Mode Selector */}
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Payment Mode</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {['cash', 'hybrid', 'online'].map(mode => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, payment_mode: mode })}
+                                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${formData.payment_mode === mode
+                                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                            }`}
+                                                    >
+                                                        {mode === 'cash' && '💵 Cash Only'}
+                                                        {mode === 'hybrid' && '📱 Cash + Online'}
+                                                        {mode === 'online' && '🌐 Online Only'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* QR Code Upload - Only for hybrid/online */}
+                                        {(formData.payment_mode === 'hybrid' || formData.payment_mode === 'online') && (
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                                                    Payment QR Code
+                                                </label>
+                                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleQRUpload}
+                                                        className="hidden"
+                                                        id="qr-upload"
+                                                    />
+                                                    {formData.qr_code_path ? (
+                                                        <div className="flex items-center gap-4">
+                                                            <img
+                                                                src={formData.qr_code_path}
+                                                                alt="QR Code"
+                                                                className="h-32 w-32 object-contain border rounded"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <p className="text-sm text-green-600 font-medium">QR Code uploaded</p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setFormData({ ...formData, qr_code_path: '' })}
+                                                                    className="text-xs text-red-600 hover:text-red-700 mt-1"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <label htmlFor="qr-upload" className="cursor-pointer">
+                                                            <div className="flex flex-col items-center">
+                                                                <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                                                                <p className="text-sm text-gray-600">Click to upload QR code</p>
+                                                                <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5MB</p>
+                                                            </div>
+                                                        </label>
+                                                    )}
+                                                    {uploadingQR && (
+                                                        <div className="flex items-center justify-center mt-2">
+                                                            <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                                                            <span className="ml-2 text-sm text-gray-600">Uploading...</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="col-span-2">
                                             <AdminTextarea label="Description" rows="3" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />

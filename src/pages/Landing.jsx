@@ -1,11 +1,17 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Calendar, Users, Trophy } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export default function Landing() {
     const { user, isAdmin, isCoordinator, loading } = useAuth()
     const navigate = useNavigate()
+    const [festSettings, setFestSettings] = useState(null)
+
+    useEffect(() => {
+        fetchFestSettings()
+    }, [])
 
     useEffect(() => {
         if (!loading && user) {
@@ -19,16 +25,28 @@ export default function Landing() {
         }
     }, [user, isAdmin, isCoordinator, loading, navigate])
 
+    const fetchFestSettings = async () => {
+        try {
+            const { data } = await supabase
+                .from('global_settings')
+                .select('*')
+                .single()
+            setFestSettings(data)
+        } catch (error) {
+            console.error('Error fetching fest settings:', error)
+        }
+    }
+
     return (
         <div className="bg-white">
             {/* Hero Section */}
             <div className="relative isolate px-6 pt-14 lg:px-8">
                 <div className="mx-auto max-w-2xl py-32 sm:py-48 lg:py-56 text-center">
                     <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
-                        Bonhomie College Fest
+                        {festSettings?.fest_name || 'Bonhomie College Fest'}
                     </h1>
                     <p className="mt-6 text-lg leading-8 text-gray-600">
-                        Join us for 6 days of cultural, technical, and sports events. Showcase your talent and win exciting prizes!
+                        Join us for {festSettings?.fest_duration_days || 6} days of cultural, technical, and sports events. Showcase your talent and win exciting prizes!
                     </p>
                     <div className="mt-10 flex items-center justify-center gap-x-6">
                         <Link
@@ -67,7 +85,7 @@ export default function Landing() {
                                     <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
                                         <Calendar className="h-6 w-6 text-white" aria-hidden="true" />
                                     </div>
-                                    6 Days of Fun
+                                    {festSettings?.fest_duration_days || 6} Days of Fun
                                 </dt>
                                 <dd className="mt-2 text-base leading-7 text-gray-600">
                                     Packed schedule with events ranging from dance and music to coding and robotics.

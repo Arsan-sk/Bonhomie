@@ -1,21 +1,40 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
+import { formatEventDate } from '../lib/dateUtils'
 
 export default function EventDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const location = useLocation()
     const { user } = useAuth()
     const [event, setEvent] = useState(null)
     const [loading, setLoading] = useState(true)
     const [registration, setRegistration] = useState(null)
+    const [festSettings, setFestSettings] = useState(null)
+
+    // Detect if we're in student context
+    const isStudentContext = location.pathname.startsWith('/student')
 
     useEffect(() => {
+        fetchFestSettings()
         fetchEventDetails()
     }, [id, user])
+
+    const fetchFestSettings = async () => {
+        try {
+            const { data } = await supabase
+                .from('global_settings')
+                .select('*')
+                .single()
+            setFestSettings(data)
+        } catch (error) {
+            console.error('Error fetching fest settings:', error)
+        }
+    }
 
     const fetchEventDetails = async () => {
         try {
@@ -137,12 +156,17 @@ export default function EventDetail() {
                     <div className="space-y-6">
                         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Event Details</h3>
-                            <div className="space-y-4">
-                                <div className="flex items-start">
-                                    <Calendar className="h-5 w-5 text-gray-400 mt-0.5 mr-3" />
+                            <div className="space-y-3">
+                                <div className="flex items-center text-gray-700">
+                                    <Calendar className="h-5 w-5 mr-3 text-gray-400" />
                                     <div>
-                                        <p className="font-medium text-gray-900">{event.day}</p>
-                                        <p className="text-sm text-gray-500">{event.event_date ? format(new Date(event.event_date), 'MMMM d, yyyy') : 'Date TBA'}</p>
+                                        <p className="font-medium text-gray-900">Day {event.day_number || 1}</p>
+                                        <p className="text-sm text-gray-500">
+                                            {festSettings && event.day_number
+                                                ? formatEventDate(event.day_number, festSettings.fest_start_date)
+                                                : event.date || 'Date TBA'
+                                            }
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-start">
@@ -186,7 +210,7 @@ export default function EventDetail() {
                                     </div>
                                 ) : user ? (
                                     <button
-                                        onClick={() => navigate(`/events/${id}/register`)}
+                                        onClick={() => navigate(isStudentContext ? `/student/events/${id}/register` : `/events/${id}/register`)}
                                         disabled={!event.is_active}
                                         className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none disabled:bg-gray-400 disabled:cursor-not-allowed"
                                     >

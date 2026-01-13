@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Search, UserPlus, UserMinus, ShieldCheck, Loader2 } from 'lucide-react'
+import { Search, UserPlus, UserMinus, ShieldCheck, Loader2, Plus } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
+import CoordinatorCreateModal from '../../components/admin/CoordinatorCreateModal'
 
 export default function AdminCoordinators() {
     const [coordinators, setCoordinators] = useState([])
@@ -10,6 +11,7 @@ export default function AdminCoordinators() {
     const [searchResult, setSearchResult] = useState(null)
     const [searching, setSearching] = useState(false)
     const [tableSearch, setTableSearch] = useState('')
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
     useEffect(() => {
         fetchCoordinators()
@@ -159,9 +161,16 @@ export default function AdminCoordinators() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-gray-900">Role Promotion Center</h2>
-                    <p className="mt-1 text-sm text-gray-500">Manage Faculty and Student Coordinators accesses.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-gray-900">Coordinator Management</h2>
+                    <p className="mt-1 text-sm text-gray-500">Create new coordinators or promote existing users.</p>
                 </div>
+                <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                    <Plus className="h-5 w-5" />
+                    Create Coordinator
+                </button>
             </div>
 
             {/* Promotion Panel */}
@@ -228,7 +237,14 @@ export default function AdminCoordinators() {
                 loading={loading}
                 searchable={true}
                 onSearchChange={setTableSearch}
-                emptyMessage="No coordinators found. Promote a user to get started."
+                emptyMessage="No coordinators found. Promote a user or create a new coordinator to get started."
+            />
+
+            {/* Create Coordinator Modal */}
+            <CoordinatorCreateModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={fetchCoordinators}
             />
         </div>
     )

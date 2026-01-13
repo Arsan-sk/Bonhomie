@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell } from 'lucide-react'
+import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 
 export default function CoordinatorShell() {
@@ -16,8 +16,11 @@ export default function CoordinatorShell() {
 
     const navigation = [
         { name: 'Dashboard', href: '/coordinator/dashboard', icon: LayoutDashboard },
-        { name: 'My Events', href: '/coordinator/events', icon: Calendar },
+        { name: 'Manage Events', href: '/coordinator/events', icon: Calendar },
         { name: 'Analytics', href: '/coordinator/analytics', icon: BarChart3 },
+        { name: 'Browse Events', href: '/coordinator/browse-events', icon: Calendar },
+        { name: 'Live Events', href: '/coordinator/live', icon: Activity },
+        { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
         { name: 'Profile', href: '/coordinator/profile', icon: User },
     ]
 

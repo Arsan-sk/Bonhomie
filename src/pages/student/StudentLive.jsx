@@ -22,7 +22,7 @@ export default function StudentLive() {
                 .from('events')
                 .select('*')
                 .in('status', ['live', 'ongoing'])
-                .order('day_order', { ascending: true })
+                .order('day_number', { ascending: true })
 
             if (eventsError) throw eventsError
             setLiveEvents(eventsData || [])

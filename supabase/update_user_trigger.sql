@@ -21,7 +21,7 @@ begin
     new.id,
     new.raw_user_meta_data->>'full_name',
     new.email,
-    'user',
+    coalesce(new.raw_user_meta_data->>'role', 'student'),
     new.raw_user_meta_data->>'roll_number',
     new.raw_user_meta_data->>'school',
     new.raw_user_meta_data->>'department',

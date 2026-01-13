@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useLocation } from 'react-router-dom'
 import { Calendar, Trophy, Activity, Award } from 'lucide-react'
 
 export default function StudentMyEvents() {
     const { user } = useAuth()
+    const location = useLocation()
     const [myRegistrations, setMyRegistrations] = useState([])
     const [loading, setLoading] = useState(true)
+
+    // Detect if we're in coordinator context
+    const isCoordinator = location.pathname.startsWith('/coordinator')
+    const eventsBasePath = isCoordinator ? '/coordinator/browse-events' : '/student/events'
 
     useEffect(() => {
         if (user) {
@@ -79,7 +85,7 @@ export default function StudentMyEvents() {
                     <h3 className="mt-4 text-lg font-medium text-gray-900">No registrations yet</h3>
                     <p className="mt-2 text-gray-500">Start exploring events and register to participate!</p>
                     <a
-                        href="/student/events"
+                        href={eventsBasePath}
                         className="mt-4 inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                     >
                         Browse Events
@@ -162,7 +168,7 @@ export default function StudentMyEvents() {
                                 {/* Action Button */}
                                 <div className="mt-4">
                                     <a
-                                        href={`/events/${registration.event.id}`}
+                                        href={`${eventsBasePath.replace('/browse-events', '')}/ events/${registration.event.id}`}
                                         className="block w-full text-center px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium text-sm transition-colors"
                                     >
                                         View Event Details
