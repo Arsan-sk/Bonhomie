@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { Plus, X, Users, Loader2, Trash2 } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import EventForm from '../../components/events/EventForm'
+import { showToast } from '../../components/ui/Toast'
 
 export default function AdminEvents() {
     const [events, setEvents] = useState([])
@@ -89,7 +90,7 @@ export default function AdminEvents() {
                     .eq('id', editingEvent.id)
 
                 if (error) throw error
-                alert('Event updated successfully!')
+                showToast('Event updated successfully!', 'success')
             } else {
                 // Create new event
                 const { data, error } = await supabase
@@ -99,7 +100,7 @@ export default function AdminEvents() {
                     .single()
 
                 if (error) throw error
-                alert('Event created successfully!')
+                showToast('Event created successfully!', 'success')
             }
 
             await fetchEvents()
@@ -123,13 +124,13 @@ export default function AdminEvents() {
 
             if (error) throw error
 
-            alert('Event deleted successfully!')
+            showToast('Event deleted successfully!', 'success')
             setIsEventFormOpen(false)
             setEditingEvent(null)
             fetchEvents()
         } catch (error) {
             console.error('Error deleting event:', error)
-            alert('Failed to delete event')
+            showToast('Failed to delete event', 'error')
         }
     }
 

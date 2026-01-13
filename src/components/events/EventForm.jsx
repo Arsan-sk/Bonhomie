@@ -110,36 +110,29 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
             // Convert time to 24-hour format for database
             const start_time = convertTo24Hour(formData.time_hour, formData.time_minute, formData.time_period)
 
-            // Prepare payload with correct schema field names
+            // Prepare payload - ONLY fields that exist in schema
             const payload = {
                 name: formData.name,
                 category: formData.category,
                 subcategory: formData.subcategory,
                 day: formData.day,
                 day_order: Number(formData.day_order),
-                event_date: formData.event_date,
+                event_date: formData.event_date || null,
                 start_time: start_time,
                 venue: formData.venue || null,
                 min_team_size: Number(formData.min_team_size),
                 max_team_size: Number(formData.max_team_size),
                 fee: Number(formData.fee),
                 description: formData.description || null,
-                rules: formData.rules || null,
-                // Store in BOTH image fields for OR operator
+                // Store image_path (primary field from base schema)
                 image_path: formData.image_path || formData.image_url || null,
-                image_url: formData.image_url || formData.image_path || null,
-                // Payment fields
-                payment_mode: formData.payment_mode || null,
-                upi_id: formData.upi_id || null,
-                qr_code_path: formData.qr_code_path || null
+                // Payment fields (added via migrations)
+                ...(formData.payment_mode && { payment_mode: formData.payment_mode }),
+                ...(formData.upi_id && { upi_id: formData.upi_id }),
+                ...(formData.qr_code_path && { qr_code_path: formData.qr_code_path }),
+                // Rules as text (matching admin_schema.sql)
+                ...(formData.rules && { rules: formData.rules })
             }
-
-            // Remove undefined/empty optional fields
-            Object.keys(payload).forEach(key => {
-                if (payload[key] === undefined || payload[key] === '') {
-                    payload[key] = null
-                }
-            })
 
             // WAIT for onSubmit to complete!
             await onSubmit(payload)
@@ -148,7 +141,8 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
             onClose()
         } catch (error) {
             console.error('Form submission error:', error)
-            alert('Failed to save event: ' + (error.message || 'Please try again.'))
+            const errorMsg = error.message || error.hint || 'Please try again.'
+            alert('Failed to save event: ' + errorMsg)
         } finally {
             setSaving(false)
         }

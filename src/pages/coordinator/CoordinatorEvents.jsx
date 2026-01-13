@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { Link } from 'react-router-dom'
 import EventForm from '../../components/events/EventForm'
+import { showToast } from '../../components/ui/Toast'
 
 export default function CoordinatorEvents() {
     const { user } = useAuth()
@@ -57,10 +58,10 @@ export default function CoordinatorEvents() {
 
             // 3. Refresh event list
             await fetchMyEvents()
-            alert('Event created successfully!')
+            showToast('Event created successfully!', 'success')
         } catch (error) {
             console.error('Error creating event:', error)
-            alert('Failed to create event: ' + error.message)
+            showToast('Failed to create event: ' + error.message, 'error')
             throw error
         }
     }
