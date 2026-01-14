@@ -94,7 +94,7 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
             return
         }
 
-        if (formData.payment_mode === 'online' && !formData.upi_id) {
+        if (formData.payment_mode === 'online' && !formData.upi_id?.trim()) {
             alert('UPI ID is required for online payment mode')
             return
         }
@@ -107,32 +107,78 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
         setSaving(true)
 
         try {
-            // Convert time to 24-hour format for database
+            // Convert time to PostgreSQL time format (HH:MM:SS)
             const start_time = convertTo24Hour(formData.time_hour, formData.time_minute, formData.time_period)
 
-            // Prepare payload - ONLY fields that exist in schema
-            const payload = {
-                name: formData.name,
-                category: formData.category,
-                subcategory: formData.subcategory,
-                day: formData.day,
-                day_order: Number(formData.day_order),
-                event_date: formData.event_date || null,
-                start_time: start_time,
-                venue: formData.venue || null,
-                min_team_size: Number(formData.min_team_size),
-                max_team_size: Number(formData.max_team_size),
-                fee: Number(formData.fee),
-                description: formData.description || null,
-                // Store image_path (primary field from base schema)
-                image_path: formData.image_path || formData.image_url || null,
-                // Payment fields (added via migrations)
-                ...(formData.payment_mode && { payment_mode: formData.payment_mode }),
-                ...(formData.upi_id && { upi_id: formData.upi_id }),
-                ...(formData.qr_code_path && { qr_code_path: formData.qr_code_path }),
-                // Rules as text (matching admin_schema.sql)
-                ...(formData.rules && { rules: formData.rules })
+            // Build payload matching EXACT database schema
+            const payload = {}
+
+            // TEXT fields - trim and ensure not empty
+            payload.name = String(formData.name).trim()
+            payload.category = String(formData.category)
+            payload.subcategory = String(formData.subcategory)
+            payload.day = String(formData.day) // TEXT: 'Day 1', 'Day 2'
+
+            // INTEGER fields - ensure proper number conversion
+            payload.day_order = parseInt(formData.day_order) || 1
+            payload.min_team_size = parseInt(formData.min_team_size) || 1
+            payload.max_team_size = parseInt(formData.max_team_size) || 1
+
+            // NUMERIC field - for decimal/currency
+            payload.fee = parseFloat(formData.fee) || 0
+
+            // DATE field (YYYY-MM-DD format)
+            if (formData.event_date) {
+                payload.event_date = formData.event_date
             }
+
+            // TIME field (HH:MM:SS format)
+            if (start_time) {
+                payload.start_time = start_time
+            }
+
+            // Optional TEXT fields - only include if not empty
+            if (formData.venue?.trim()) {
+                payload.venue = formData.venue.trim()
+            }
+
+            if (formData.description?.trim()) {
+                payload.description = formData.description.trim()
+            }
+
+            // Image - use image_path as primary
+            if (formData.image_path || formData.image_url) {
+                payload.image_path = formData.image_path || formData.image_url
+            }
+
+            // Payment fields (conditional inclusion)
+            if (formData.payment_mode) {
+                payload.payment_mode = formData.payment_mode
+            }
+
+            if (formData.upi_id?.trim()) {
+                payload.upi_id = formData.upi_id.trim()
+            }
+
+            if (formData.qr_code_path) {
+                payload.qr_code_path = formData.qr_code_path
+            }
+
+            // Rules - send as text (will be converted to jsonb if needed by database)
+            if (formData.rules?.trim()) {
+                payload.rules = formData.rules.trim()
+            }
+
+            console.log('Submitting payload with types:', {
+                ...payload,
+                _types: {
+                    name: typeof payload.name,
+                    day_order: typeof payload.day_order,
+                    fee: typeof payload.fee,
+                    event_date: typeof payload.event_date,
+                    start_time: typeof payload.start_time
+                }
+            })
 
             // WAIT for onSubmit to complete!
             await onSubmit(payload)
@@ -141,7 +187,7 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
             onClose()
         } catch (error) {
             console.error('Form submission error:', error)
-            const errorMsg = error.message || error.hint || 'Please try again.'
+            const errorMsg = error.message || error.hint || error.details || 'Please check console for details.'
             alert('Failed to save event: ' + errorMsg)
         } finally {
             setSaving(false)
