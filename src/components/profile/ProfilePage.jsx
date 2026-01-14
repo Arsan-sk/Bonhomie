@@ -10,7 +10,7 @@ export default function ProfilePage({ profileId, role }) {
     const [participatedEvents, setParticipatedEvents] = useState([])
     const [loading, setLoading] = useState(true)
     const [isEditing, setIsEditing] = useState(false)
-    const [editForm, setEditForm] = useState({ full_name: '' })
+    const [editForm, setEditForm] = useState({ full_name: '', phone: '' })
     const [avatarMode, setAvatarMode] = useState(null) // 'upload' or 'url'
     const [avatarUrl, setAvatarUrl] = useState('')
     const [avatarFile, setAvatarFile] = useState(null)
@@ -43,7 +43,10 @@ export default function ProfilePage({ profileId, role }) {
 
             if (profileError) throw profileError
             setProfile(profileData)
-            setEditForm({ full_name: profileData.full_name || '' })
+            setEditForm({
+                full_name: profileData.full_name || '',
+                phone: profileData.phone || ''
+            })
 
             // Fetch registrations for stats and participated events
             const { data: registrations, error: regsError } = await supabase
@@ -134,13 +137,20 @@ export default function ProfilePage({ profileId, role }) {
         try {
             const { error } = await supabase
                 .from('profiles')
-                .update({ full_name: editForm.full_name })
+                .update({
+                    full_name: editForm.full_name,
+                    phone: editForm.phone
+                })
                 .eq('id', user.id)
 
             if (error) throw error
 
             setMessage({ type: 'success', text: 'Profile updated successfully!' })
-            setProfile({ ...profile, full_name: editForm.full_name })
+            setProfile({
+                ...profile,
+                full_name: editForm.full_name,
+                phone: editForm.phone
+            })
             setIsEditing(false)
 
         } catch (error) {
@@ -247,10 +257,24 @@ export default function ProfilePage({ profileId, role }) {
                     {/* Basic Info */}
                     <div className="flex-1 text-center md:text-left">
                         <h1 className="text-3xl font-bold mb-2">{profile?.full_name || 'User'}</h1>
-                        <p className="text-white/80 mb-4">{profile?.college_email || user?.email}</p>
-                        {profile?.roll_number && (
-                            <p className="text-white/60 text-sm mb-4">Roll No: {profile.roll_number}</p>
+
+                        {/* Email and Department on same line */}
+                        <p className="text-white/80 mb-2">
+                            {profile?.college_email || user?.email}
+                            {profile?.department && (
+                                <span className="ml-4 text-white/70">• {profile.department}</span>
+                            )}
+                        </p>
+
+                        {/* Roll Number and Phone on same line */}
+                        {(profile?.roll_number || profile?.phone) && (
+                            <p className="text-white/60 text-sm mb-4">
+                                {profile?.roll_number && `Roll No: ${profile.roll_number}`}
+                                {profile?.roll_number && profile?.phone && <span className="mx-3">•</span>}
+                                {profile?.phone && `Phone: ${profile.phone}`}
+                            </p>
                         )}
+
                         <div className={`inline-flex items-center gap-2 px-4 py-2 bg-${roleInfo.color}-500/30 rounded-full text-sm font-bold`}>
                             <roleInfo.icon className="h-4 w-4" />
                             {roleInfo.label}
@@ -377,6 +401,16 @@ export default function ProfilePage({ profileId, role }) {
                                 />
                             </div>
                         )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                            <input
+                                type="tel"
+                                value={editForm.phone}
+                                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                                placeholder="Enter phone number"
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                            />
+                        </div>
                         <div className="flex gap-3">
                             <button
                                 onClick={handleSaveProfile}
@@ -387,7 +421,10 @@ export default function ProfilePage({ profileId, role }) {
                             <button
                                 onClick={() => {
                                     setIsEditing(false)
-                                    setEditForm({ full_name: profile.full_name })
+                                    setEditForm({
+                                        full_name: profile.full_name,
+                                        phone: profile.phone
+                                    })
                                 }}
                                 className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition"
                             >
@@ -416,8 +453,8 @@ export default function ProfilePage({ profileId, role }) {
                                 <div className="flex items-start justify-between mb-2">
                                     <h4 className="font-bold text-gray-900">{reg.event?.name}</h4>
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                            reg.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                                'bg-red-100 text-red-700'
+                                        reg.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-red-100 text-red-700'
                                         }`}>
                                         {reg.status.charAt(0).toUpperCase() + reg.status.slice(1)}
                                     </span>
