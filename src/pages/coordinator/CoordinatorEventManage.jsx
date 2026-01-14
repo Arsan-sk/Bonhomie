@@ -114,27 +114,38 @@ export default function CoordinatorEventManage() {
         setLoadingPayments(true)
         console.log('Fetching payments for event:', id)
 
-        // Fetch ALL pending registrations
+        // Fetch ONLY pending registrations
         const { data, error } = await supabase
             .from('registrations')
             .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, user:profiles(id, full_name, college_email, roll_number)`)
             .eq('event_id', id)
+            .eq('status', 'pending') // ONLY pending payments
             .order('registered_at', { ascending: false })
 
         if (error) {
-            console.error(error)
+            console.error('Error fetching payments:', error)
             setPayments([])
         } else {
+            console.log('Fetched pending payments:', data?.length)
+
             // Generate public URLs for payment screenshots
             const paymentsWithUrls = (data || []).map(payment => {
                 if (payment.payment_screenshot_path) {
-                    const { data: { publicUrl } } = supabase.storage
+                    const { data: urlData } = supabase.storage
                         .from('payment_proofs')
                         .getPublicUrl(payment.payment_screenshot_path)
-                    return { ...payment, payment_screenshot_url: publicUrl }
+
+                    console.log('Screenshot URL generated:', {
+                        path: payment.payment_screenshot_path,
+                        publicUrl: urlData.publicUrl
+                    })
+
+                    return { ...payment, payment_screenshot_url: urlData.publicUrl }
                 }
                 return payment
             })
+
+            console.log('Payments with URLs:', paymentsWithUrls)
             setPayments(paymentsWithUrls)
         }
 
