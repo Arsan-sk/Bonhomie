@@ -129,7 +129,7 @@ export default function CoordinatorEventManage() {
             setPayments([])
         } else {
             console.log('✅ Fetched pending payments:', data?.length)
-            
+
             // Generate public URLs for payment screenshots
             const paymentsWithUrls = (data || []).map(payment => {
                 if (payment.payment_screenshot_path) {
@@ -137,18 +137,18 @@ export default function CoordinatorEventManage() {
                     const { data: urlData } = supabase.storage
                         .from('payment_proofs')
                         .getPublicUrl(payment.payment_screenshot_path)
-                    
+
                     console.log('🖼️ Screenshot URL:', {
                         original_path: payment.payment_screenshot_path,
                         generated_url: urlData.publicUrl,
                         user: payment.user?.full_name
                     })
-                    
+
                     return { ...payment, payment_screenshot_url: urlData.publicUrl }
                 }
                 return payment
             })
-            
+
             console.log('💾 Final payments with URLs:', paymentsWithUrls.length)
             setPayments(paymentsWithUrls)
         }
@@ -614,9 +614,16 @@ export default function CoordinatorEventManage() {
                                                 >
                                                     <div className={`p-4 flex items-center justify-between ${isLeader ? 'bg-indigo-50' : 'bg-white'}`}>
                                                         <div className="flex items-center gap-4 flex-1">
-                                                            <div className="h-12 w-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setSelectedProfile(participant.user)
+                                                                }}
+                                                                className="h-12 w-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold hover:ring-4 hover:ring-indigo-200 transition-all cursor-pointer"
+                                                                title="View Profile"
+                                                            >
                                                                 {participant.user?.full_name?.[0]?.toUpperCase() || '?'}
-                                                            </div>
+                                                            </button>
                                                             <div className="flex-1">
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <span className="font-bold text-gray-900">{participant.user?.full_name || 'Unknown'}</span>
