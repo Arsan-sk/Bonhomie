@@ -165,8 +165,11 @@ export default function EventForm({ isOpen, onClose, onSubmit, initialData = nul
             }
 
             // Rules - send as text (will be converted to jsonb if needed by database)
-            if (formData.rules?.trim()) {
+            if (formData.rules && typeof formData.rules === 'string' && formData.rules.trim()) {
                 payload.rules = formData.rules.trim()
+            } else if (formData.rules && typeof formData.rules !== 'string') {
+                // Handle if rules is accidentally an object or array
+                payload.rules = String(formData.rules)
             }
 
             console.log('Submitting payload with types:', {

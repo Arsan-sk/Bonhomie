@@ -160,10 +160,10 @@ export default function EventDetail() {
                                 <div className="flex items-center text-gray-700">
                                     <Calendar className="h-5 w-5 mr-3 text-gray-400" />
                                     <div>
-                                        <p className="font-medium text-gray-900">Day {event.day_number || 1}</p>
+                                        <p className="font-medium text-gray-900">Day {event.day_order || 1}</p>
                                         <p className="text-sm text-gray-500">
-                                            {festSettings && event.day_number
-                                                ? formatEventDate(event.day_number, festSettings.fest_start_date)
+                                            {festSettings && event.day_order
+                                                ? formatEventDate(event.day_order, festSettings.fest_start_date)
                                                 : event.date || 'Date TBA'
                                             }
                                         </p>

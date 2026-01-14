@@ -40,7 +40,7 @@ export default function StudentEvents({ baseUrl = '/student/events' }) {
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
-                .order('day_number', { ascending: true })
+                .order('day_order', { ascending: true })
                 .order('start_time', { ascending: true })
 
             if (error) throw error

@@ -156,6 +156,132 @@ export default function CoordinatorEventManage() {
         setLoadingPayments(false)
     }
 
+    const handleExportCSV = async () => {
+        if (!event) return
+
+        try {
+            console.log('Starting CSV export for event:', event.name)
+
+            // Fetch all confirmed participants with full profile data
+            const { data: registrations, error } = await supabase
+                .from('registrations')
+                .select(`
+                    *,
+                    user:profiles (
+                        id,
+                        full_name,
+                        college_email,
+                        roll_number,
+                        department,
+                        year_of_study,
+                        gender,
+                        phone,
+                        school
+                    )
+                `)
+                .eq('event_id', id)
+                .eq('status', 'confirmed')
+                .order('registered_at', { ascending: true })
+
+            if (error) throw error
+            if (!registrations || registrations.length === 0) {
+                alert('No confirmed participants to export')
+                return
+            }
+
+            console.log('Fetched registrations:', registrations.length)
+
+            // Build CSV content
+            let csvContent = ''
+
+            // EVENT HEADER SECTION
+            csvContent += `Event Name:,${event.name}\n`
+            csvContent += `Category:,${event.category}\n`
+            csvContent += `Event Type:,${event.subcategory}\n`
+            csvContent += `Date:,${event.event_date || 'TBA'}\n`
+            csvContent += `Venue:,${event.venue || 'TBA'}\n`
+            csvContent += `Fee:,₹${event.fee || 0}\n`
+
+            // Fetch coordinator details
+            const { data: assignments } = await supabase
+                .from('event_assignments')
+                .select('coordinator:profiles(full_name, college_email)')
+                .eq('event_id', id)
+
+            if (assignments && assignments.length > 0) {
+                const coordinatorNames = assignments.map(a => a.coordinator?.full_name).filter(Boolean).join(', ')
+                csvContent += `Coordinators:,${coordinatorNames}\n`
+            }
+
+            csvContent += `Total Participants:,${registrations.length}\n`
+            csvContent += `\n` // Empty line
+
+            // CHECK IF INDIVIDUAL OR GROUP EVENT
+            const isGroupEvent = event.subcategory?.toLowerCase() === 'group'
+
+            if (isGroupEvent) {
+                // GROUP EVENT CSV
+                csvContent += 'Team No,Member No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n'
+
+                let teamNumber = 0
+                registrations.forEach((reg) => {
+                    const teamMembers = reg.team_members || []
+
+                    if (teamMembers.length > 0) {
+                        teamNumber++
+
+                        // Team Leader (first member)
+                        const leader = reg.user
+                        if (leader) {
+                            csvContent += `${teamNumber},1,${escapeCSV(leader.roll_number)},${escapeCSV(leader.full_name)},${escapeCSV(leader.college_email)},${escapeCSV(leader.school)},${escapeCSV(leader.department)},${escapeCSV(leader.year_of_study)},${escapeCSV(leader.gender)},${escapeCSV(leader.phone)}\n`
+                        }
+
+                        // Team Members - leave team number blank for cleaner look
+                        teamMembers.forEach((member, idx) => {
+                            csvContent += `,${idx + 2},${escapeCSV(member.roll_number)},${escapeCSV(member.name)},${escapeCSV(member.email)},${escapeCSV(member.school)},${escapeCSV(member.department)},${escapeCSV(member.year_of_study)},${escapeCSV(member.gender)},${escapeCSV(member.phone)}\n`
+                        })
+                    }
+                })
+            } else {
+                // INDIVIDUAL EVENT CSV
+                csvContent += 'Serial No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n'
+
+                registrations.forEach((reg, index) => {
+                    const user = reg.user
+                    if (user) {
+                        csvContent += `${index + 1},${escapeCSV(user.roll_number)},${escapeCSV(user.full_name)},${escapeCSV(user.college_email)},${escapeCSV(user.school)},${escapeCSV(user.department)},${escapeCSV(user.year_of_study)},${escapeCSV(user.gender)},${escapeCSV(user.phone)}\n`
+                    }
+                })
+            }
+
+            // Download CSV
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+            const link = document.createElement('a')
+            const url = URL.createObjectURL(blob)
+            link.setAttribute('href', url)
+            link.setAttribute('download', `${event.name.replace(/[^a-z0-9]/gi, '_')}_Participants_${new Date().toISOString().split('T')[0]}.csv`)
+            link.style.visibility = 'hidden'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+
+            console.log('CSV exported successfully')
+        } catch (error) {
+            console.error('Error exporting CSV:', error)
+            alert('Failed to export CSV: ' + error.message)
+        }
+    }
+
+    // Helper function to escape CSV values
+    const escapeCSV = (value) => {
+        if (value === null || value === undefined) return ''
+        const str = String(value)
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`
+        }
+        return str
+    }
+
 
     const handleCreateRound = async () => {
         const { error } = await supabase.from('rounds').insert([{ ...roundForm, event_id: id }])
@@ -419,7 +545,7 @@ export default function CoordinatorEventManage() {
                                             {showMembersOnly ? 'Show Leaders' : 'Members Only'}
                                         </button>
                                     )}
-                                    <button className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100"><Download className="h-4 w-4" /> Export CSV</button>
+                                    <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100"><Download className="h-4 w-4" /> Export CSV</button>
                                 </div>
                             </div>
                             {loadingParticipants ? (

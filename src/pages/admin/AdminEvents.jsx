@@ -29,15 +29,33 @@ export default function AdminEvents() {
     const fetchEvents = async () => {
         setLoading(true)
         try {
+            console.log('AdminEvents: Fetching all events...')
+
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
                 .order('day_order', { ascending: true })
 
-            if (error) throw error
+            console.log('AdminEvents: Fetch result:', {
+                dataCount: data?.length,
+                error: error?.message,
+                firstEvent: data?.[0]
+            })
+
+            if (error) {
+                console.error('AdminEvents: Supabase error:', error)
+                throw error
+            }
+
+            if (!data || data.length === 0) {
+                console.warn('AdminEvents: No events found in database')
+            }
+
             setEvents(data || [])
+            console.log('AdminEvents: Events state updated with', data?.length || 0, 'events')
         } catch (error) {
-            console.error('Error fetching events:', error)
+            console.error('AdminEvents: Error fetching events:', error)
+            setEvents([]) // Explicitly set empty array on error
         } finally {
             setLoading(false)
         }
@@ -45,10 +63,23 @@ export default function AdminEvents() {
 
     const fetchAvailableCoordinators = async () => {
         try {
-            const { data } = await supabase
+            console.log('Fetching available coordinators...')
+            const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('role', 'faculty')
+                .eq('role', 'coordinator')
+
+            console.log('Available coordinators COUNT:', data?.length)
+            console.log('Available coordinators DATA:', JSON.stringify(data, null, 2))
+            console.log('Available coordinators ERROR:', error)
+
+            if (error) {
+                console.error('Error fetching coordinators:', error)
+            }
+
+            if (!data || data.length === 0) {
+                console.warn('NO COORDINATORS FOUND - check if any profiles have role="faculty"')
+            }
 
             setAvailableCoordinators(data || [])
         } catch (error) {
@@ -58,10 +89,28 @@ export default function AdminEvents() {
 
     const fetchAssignments = async (eventId) => {
         try {
-            const { data } = await supabase
+            console.log('Fetching assignments for event:', eventId)
+            const { data, error } = await supabase
                 .from('event_assignments')
                 .select('*, coordinator:profiles(*)')
                 .eq('event_id', eventId)
+
+            console.log('Assignments COUNT:', data?.length)
+            console.log('Assignments DATA:', JSON.stringify(data, null, 2))
+            console.log('Assignments ERROR:', error)
+
+            if (error) {
+                console.error('Error fetching assignments:', error)
+            }
+
+            if (data && data.length > 0) {
+                console.log('Assignment coordinator check:', data.map(a => ({
+                    id: a.id,
+                    coordinator_id: a.coordinator_id,
+                    coordinator_name: a.coordinator?.full_name,
+                    coordinator_email: a.coordinator?.college_email
+                })))
+            }
 
             setAssignments(data || [])
         } catch (error) {
@@ -112,25 +161,29 @@ export default function AdminEvents() {
         }
     }
 
-    const handleDeleteEvent = async () => {
-        if (!editingEvent) return
-        if (!confirm(`Delete "${editingEvent.name}"? This cannot be undone.`)) return
+    const handleDeleteEvent = async (event) => {
+        if (!event) return
+
+        if (!confirm(`Delete "${event.name}"? This will permanently delete the event and all related data (assignments, registrations). This cannot be undone.`)) {
+            return
+        }
 
         try {
+            console.log('Deleting event:', event.id)
+
+            // Delete event (cascade will handle assignments and registrations)
             const { error } = await supabase
                 .from('events')
                 .delete()
-                .eq('id', editingEvent.id)
+                .eq('id', event.id)
 
             if (error) throw error
 
             showToast('Event deleted successfully!', 'success')
-            setIsEventFormOpen(false)
-            setEditingEvent(null)
-            fetchEvents()
+            await fetchEvents()
         } catch (error) {
             console.error('Error deleting event:', error)
-            showToast('Failed to delete event', 'error')
+            showToast('Failed to delete event: ' + (error.message || 'Unknown error'), 'error')
         }
     }
 
@@ -180,6 +233,13 @@ export default function AdminEvents() {
         {
             key: 'actions', title: 'Actions', render: (row) => (
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteEvent(row) }}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-red-600 bg-white hover:bg-red-50 border border-red-200 text-xs font-semibold transition-all shadow-sm"
+                        title="Delete Event"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleOpenCoordinatorModal(row) }}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 bg-white hover:bg-indigo-50 hover:text-indigo-600 border border-gray-200 text-xs font-semibold transition-all shadow-sm"

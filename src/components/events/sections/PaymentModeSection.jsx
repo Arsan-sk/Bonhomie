@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { CreditCard, Upload, Loader2, Shield } from 'lucide-react'
+import { CreditCard, Upload, Loader2, Shield, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 export default function PaymentModeSection({ formData, setFormData }) {
     const [uploadingQR, setUploadingQR] = useState(false)
+    const [error, setError] = useState('')
 
     const paymentModes = [
         { value: 'cash', label: 'Cash Only', icon: '💵', description: 'Offline payment only' },
@@ -15,33 +16,62 @@ export default function PaymentModeSection({ formData, setFormData }) {
         const file = e.target.files?.[0]
         if (!file) return
 
+        setError('')
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            setError('Please select an image file')
+            return
+        }
+
+        // Validate file size (5MB)
         if (file.size > 5 * 1024 * 1024) {
-            alert('File size must be less than 5MB')
+            setError('File size must be less than 5MB')
             return
         }
 
         setUploadingQR(true)
         try {
             const fileExt = file.name.split('.').pop()
-            const fileName = `event-qr/${Date.now()}.${fileExt}`
+            const fileName = `event-qr/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
-            const { data, error } = await supabase.storage
+            console.log('Uploading QR to event-assets bucket:', fileName)
+
+            // Upload file to Supabase Storage
+            const { data, error: uploadError } = await supabase.storage
                 .from('event-assets')
-                .upload(fileName, file)
+                .upload(fileName, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                })
 
-            if (error) throw error
+            if (uploadError) {
+                console.error('QR upload error:', uploadError)
+                throw new Error(uploadError.message || 'Failed to upload QR code')
+            }
 
+            // Get public URL
             const { data: { publicUrl } } = supabase.storage
                 .from('event-assets')
                 .getPublicUrl(fileName)
 
+            console.log('QR code uploaded successfully:', publicUrl)
+
             setFormData({ ...formData, qr_code_path: publicUrl })
-        } catch (error) {
-            console.error('Error uploading QR code:', error)
-            alert('Failed to upload QR code. Please try again.')
+            setError('')
+        } catch (err) {
+            console.error('Error uploading QR code:', err)
+            setError(err.message || 'Failed to upload QR code. Please ensure the event-assets bucket exists.')
         } finally {
             setUploadingQR(false)
+            // Reset file input
+            e.target.value = ''
         }
+    }
+
+    const handleRemoveQR = () => {
+        setFormData({ ...formData, qr_code_path: '' })
+        setError('')
     }
 
     const selectedMode = paymentModes.find(m => m.value === formData.payment_mode)
@@ -58,16 +88,27 @@ export default function PaymentModeSection({ formData, setFormData }) {
                 </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                    <X className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700">{error}</p>
+                </div>
+            )}
+
             {/* Payment Mode Selection */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {paymentModes.map(mode => (
                     <button
                         key={mode.value}
                         type="button"
-                        onClick={() => setFormData({ ...formData, payment_mode: mode.value })}
+                        onClick={() => {
+                            setFormData({ ...formData, payment_mode: mode.value })
+                            setError('')
+                        }}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${formData.payment_mode === mode.value
-                                ? 'border-green-600 bg-green-50'
-                                : 'border-gray-200 hover:border-green-300'
+                            ? 'border-green-600 bg-green-50'
+                            : 'border-gray-200 hover:border-green-300'
                             }`}
                     >
                         <div className="flex items-start gap-3">
@@ -118,7 +159,7 @@ export default function PaymentModeSection({ formData, setFormData }) {
                         <div className="border-2 border-dashed border-gray-300 rounded-xl p-6">
                             <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/png,image/jpeg,image/jpg,image/webp"
                                 onChange={handleQRUpload}
                                 className="hidden"
                                 id="qr-code-upload"
@@ -130,12 +171,15 @@ export default function PaymentModeSection({ formData, setFormData }) {
                                         src={formData.qr_code_path}
                                         alt="QR Code"
                                         className="h-32 w-32 object-contain border rounded-lg"
+                                        onError={(e) => {
+                                            e.target.src = 'https://via.placeholder.com/128?text=QR+Error'
+                                        }}
                                     />
                                     <div className="flex-1">
                                         <p className="text-sm font-medium text-green-600 mb-2">✓ QR Code uploaded</p>
                                         <button
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, qr_code_path: '' })}
+                                            onClick={handleRemoveQR}
                                             className="text-xs text-red-600 hover:text-red-700 font-medium"
                                         >
                                             Remove QR Code
@@ -143,7 +187,7 @@ export default function PaymentModeSection({ formData, setFormData }) {
                                     </div>
                                 </div>
                             ) : (
-                                <label htmlFor="qr-code-upload" className="cursor-pointer">
+                                <label htmlFor="qr-code-upload" className={`cursor-pointer ${uploadingQR ? 'pointer-events-none' : ''}`}>
                                     <div className="flex flex-col items-center">
                                         {uploadingQR ? (
                                             <>

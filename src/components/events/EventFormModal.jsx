@@ -9,7 +9,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
         name: '',
         description: '',
         category: 'Technical',
-        day_number: 1,
+        day_order: 1,
         date: '',
         start_time: '',
         venue: '',
@@ -44,7 +44,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                 name: '',
                 description: '',
                 category: 'Technical',
-                day_number: 1,
+                day_order: 1,
                 date: '',
                 start_time: '',
                 venue: '',
@@ -132,9 +132,9 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
             const dayDate = new Date(globalSettings.fest_start_date)
             dayDate.setDate(dayDate.getDate() + (Number(selectedDay) - 1))
             const formattedDate = dayDate.toISOString().split('T')[0]
-            setFormData({ ...formData, day_number: selectedDay, date: formattedDate })
+            setFormData({ ...formData, day_order: selectedDay, date: formattedDate })
         } else {
-            setFormData({ ...formData, day_number: selectedDay })
+            setFormData({ ...formData, day_order: selectedDay })
         }
     }
 
@@ -257,7 +257,7 @@ export default function EventFormModal({ isOpen, onClose, onSubmit, initialData 
                         <div>
                             <AdminSelect
                                 label="Day"
-                                value={formData.day_number}
+                                value={formData.day_order}
                                 onChange={e => handleDayChange(e.target.value)}
                             >
                                 {festDays.map(day => (
