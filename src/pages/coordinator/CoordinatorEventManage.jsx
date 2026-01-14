@@ -491,41 +491,62 @@ export default function CoordinatorEventManage() {
     ]
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <Link to="/coordinator/events" className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
-                <div><h1 className="text-2xl font-bold text-gray-900">{event.name}</h1><p className="text-gray-500 text-sm">Manage your event details and lifecycle.</p></div>
-                <div className="ml-auto flex gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 font-medium transition-colors"><Download className="h-4 w-4" /> Reports</button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium shadow-md transition-colors"><Edit2 className="h-4 w-4" /> Edit Event</button>
+        <div className="max-w-7xl mx-auto px-4 md:px-0 space-y-6">
+            {/* Header - Responsive */}
+            <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <Link to="/coordinator/events" className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-900">{event.name}</h1>
+                        <p className="text-gray-500 text-xs md:text-sm hidden md:block">Manage your event details and lifecycle.</p>
+                    </div>
+                </div>
+                <div className="flex gap-2 md:ml-auto">
+                    <button className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 font-medium transition-colors text-sm">
+                        <Download className="h-4 w-4" />
+                        <span className="hidden sm:inline">Reports</span>
+                    </button>
+                    <button className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium shadow-md transition-colors text-sm">
+                        <Edit2 className="h-4 w-4" />
+                        <span className="hidden sm:inline">Edit Event</span>
+                    </button>
                 </div>
             </div>
 
-            {/* Banner */}
-            <div className="h-48 rounded-2xl overflow-hidden relative group">
+            {/* Banner - Responsive */}
+            <div className="h-32 md:h-48 rounded-xl md:rounded-2xl overflow-hidden relative group">
                 <img src={event.image_path || 'https://via.placeholder.com/1200x300'} alt="" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-6 left-6 text-white">
-                    <div className="flex items-center gap-4 text-sm font-medium opacity-90">
-                        <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /> {event.day}</span>
-                        <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {event.time}</span>
-                        <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {event.venue}</span>
+                <div className="absolute bottom-3 md:bottom-6 left-3 md:left-6 text-white">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm font-medium opacity-90">
+                        <span className="flex items-center gap-1.5"><Calendar className="h-3 md:h-4 w-3 md:w-4" /> {event.day}</span>
+                        <span className="flex items-center gap-1.5"><Clock className="h-3 md:h-4 w-3 md:w-4" /> {event.time}</span>
+                        <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin className="h-3 md:h-4 w-3 md:w-4" /> {event.venue}</span>
                     </div>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-                <div className="flex border-b border-gray-100 px-6 bg-gray-50/50">
+            {/* Tabs - Sticky & Responsive */}
+            <div className="bg-white rounded-xl md:rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+                <div className="sticky top-0 z-20 flex border-b border-gray-100 px-2 md:px-6 bg-white shadow-sm">
                     {tabs.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold border-b-2 transition-all ${activeTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
-                            <tab.icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} /> {tab.label}
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex-1 md:flex-auto flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:px-4 py-3 md:py-4 text-xs md:text-sm font-semibold border-b-2 transition-all ${activeTab === tab.id
+                                    ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                }`}
+                            title={tab.label}
+                        >
+                            <tab.icon className={`h-4 w-4 md:h-4 md:w-4 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
+                            <span className="hidden md:inline text-sm">{tab.label}</span>
+                            <span className="md:hidden text-[10px] leading-tight">{tab.label.split(' ')[0]}</span>
                         </button>
                     ))}
                 </div>
 
-                <div className="p-6 flex-1 bg-white">
+                <div className="p-3 md:p-6 flex-1 bg-white">
                     {/* OVERVIEW */}
                     {activeTab === 'overview' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-8">
