@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { User, Mail, IdCard, Shield, Upload, Link as LinkIcon, Loader2, CheckCircle, AlertCircle, Calendar, Trophy, Key, Edit2, Lock } from 'lucide-react'
 
-export default function ProfilePage({ profileId, role }) {
+export default function ProfilePage({ profileId, role, isViewOnly = false }) {
     const { user } = useAuth()
     const [profile, setProfile] = useState(null)
     const [stats, setStats] = useState({ total: 0, confirmed: 0, pending: 0, wins: 0 })
@@ -244,7 +244,7 @@ export default function ProfilePage({ profileId, role }) {
                                 <span className="text-5xl font-bold">{profile?.full_name?.charAt(0) || 'U'}</span>
                             )}
                         </div>
-                        {isOwnProfile && (
+                        {isOwnProfile && !isViewOnly && (
                             <button
                                 onClick={() => setAvatarMode(avatarMode ? null : 'upload')}
                                 className="absolute bottom-0 right-0 h-10 w-10 bg-white text-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition"
@@ -303,7 +303,7 @@ export default function ProfilePage({ profileId, role }) {
                 </div>
 
                 {/* Avatar Upload Section */}
-                {avatarMode && isOwnProfile && (
+                {avatarMode && isOwnProfile && !isViewOnly && (
                     <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-xl p-6">
                         <h3 className="font-bold mb-4">Update Avatar</h3>
                         <div className="flex flex-col md:flex-row gap-4">
@@ -342,7 +342,7 @@ export default function ProfilePage({ profileId, role }) {
                 )}
 
                 {/* Edit Profile Button */}
-                {isOwnProfile && !isEditing && (
+                {isOwnProfile && !isViewOnly && !isEditing && (
                     <button
                         onClick={() => setIsEditing(true)}
                         className="mt-6 px-6 py-2 bg-white/20 hover:bg-white/30 rounded-lg font-semibold flex items-center gap-2 transition"
@@ -362,7 +362,7 @@ export default function ProfilePage({ profileId, role }) {
             )}
 
             {/* Edit Profile Form */}
-            {isEditing && isOwnProfile && (
+            {isEditing && isOwnProfile && !isViewOnly && (
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                     <h3 className="text-lg font-bold mb-4">Edit Profile</h3>
                     <div className="space-y-4">
@@ -476,7 +476,7 @@ export default function ProfilePage({ profileId, role }) {
             </div>
 
             {/* Change Password */}
-            {isOwnProfile && (
+            {isOwnProfile && !isViewOnly && (
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
                     <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                         <Key className="h-5 w-5 text-purple-600" />

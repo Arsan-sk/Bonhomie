@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
+import ProfilePage from '../../components/profile/ProfilePage'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
@@ -35,6 +36,7 @@ export default function CoordinatorEventManage() {
     const [loadingPayments, setLoadingPayments] = useState(false)
     const [paymentModeFilter, setPaymentModeFilter] = useState('all') // 'all', 'cash', 'online'
     const [screenshotModal, setScreenshotModal] = useState({ isOpen: false, url: '' })
+    const [selectedProfile, setSelectedProfile] = useState(null) // For viewing participant profile
 
     useEffect(() => {
         fetchEventDetails()
@@ -115,42 +117,25 @@ export default function CoordinatorEventManage() {
         // Fetch ALL pending registrations
         const { data, error } = await supabase
             .from('registrations')
-            .select(`*, user:profiles (id, full_name, college_email, roll_number)`)
+            .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, user:profiles(id, full_name, college_email, roll_number)`)
             .eq('event_id', id)
-            .eq('status', 'pending')
+            .order('registered_at', { ascending: false })
 
         if (error) {
-            console.error('Error fetching payments:', error)
+            console.error(error)
             setPayments([])
         } else {
-            // 🔥 SIMPLIFIED FILTER: Only show LEADERS or registrations with payment info
-            // This correctly handles:
-            // - Team leaders (have team_members array)
-            // - Solo participants with cash mode (no transaction yet, but valid)
-            // - Solo participants with hybrid/online (have transaction)
-            const filteredPayments = (data || []).filter(reg => {
-                // Show if it's a team leader
-                if (reg.team_members && reg.team_members.length > 0) {
-                    return true;
+            // Generate public URLs for payment screenshots
+            const paymentsWithUrls = (data || []).map(payment => {
+                if (payment.payment_screenshot_path) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('payment_proofs')
+                        .getPublicUrl(payment.payment_screenshot_path)
+                    return { ...payment, payment_screenshot_url: publicUrl }
                 }
-
-                // For non-leaders (solo participants or team members):
-                // Show if they have ANY of: transaction_id, screenshot, OR payment_mode
-                // This catches cash mode registrations (no transaction yet)
-                // Hide only if they're truly empty (team member created automatically)
-                const hasPaymentInfo = reg.transaction_id || reg.payment_screenshot_path || reg.payment_mode;
-
-                // Additional check: if team_members is explicitly an empty array (not null),
-                // AND no payment info, it's likely a team member
-                if (Array.isArray(reg.team_members) && reg.team_members.length === 0 && !hasPaymentInfo) {
-                    return false; // Hide team members
-                }
-
-                return hasPaymentInfo; // Show solo participants
+                return payment
             })
-
-            console.log('Filtered payments (leaders + solo):', filteredPayments.length, '/', data?.length)
-            setPayments(filteredPayments)
+            setPayments(paymentsWithUrls)
         }
 
         setLoadingPayments(false)
@@ -397,14 +382,34 @@ export default function CoordinatorEventManage() {
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: Clock },
+        { id: 'payments', label: 'Payments', icon: DollarSign }, // Moved to 2nd position
         { id: 'participants', label: 'Participants', icon: Users },
         { id: 'rounds', label: 'Rounds', icon: Trophy },
         { id: 'results', label: 'Results', icon: BarChart3 },
-        { id: 'payments', label: 'Payments', icon: DollarSign },
     ]
 
     const participantColumns = [
-        { key: 'user', title: 'Participant', sortable: true, render: (row) => (<div><div className="font-bold text-gray-900">{row.user?.full_name || 'Unknown'}</div><div className="text-xs text-gray-500">{row.user?.college_email}</div></div>) },
+        {
+            key: 'user', title: 'Participant', sortable: true, render: (row) => (
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setSelectedProfile(row.user)}
+                        className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white font-bold hover:ring-2 hover:ring-purple-300 transition-all cursor-pointer"
+                        title="View Profile"
+                    >
+                        {row.user?.avatar_url ? (
+                            <img src={row.user.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+                        ) : (
+                            <span>{row.user?.full_name?.charAt(0) || 'U'}</span>
+                        )}
+                    </button>
+                    <div>
+                        <div className="font-bold text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                        <div className="text-xs text-gray-500">{row.user?.college_email}</div>
+                    </div>
+                </div>
+            )
+        },
         { key: 'roll', title: 'Roll No', render: (row) => row.user?.roll_number || '-' },
         { key: 'department', title: 'Department', render: (row) => row.user?.department || '-' },
         { key: 'year', title: 'Year', render: (row) => row.user?.year_of_study || '-' },
@@ -905,9 +910,9 @@ export default function CoordinatorEventManage() {
                                         { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
                                         { key: 'txn', title: 'Transaction ID', render: (row) => row.transaction_id ? <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{row.transaction_id}</span> : <span className="text-gray-400 text-xs">N/A</span> },
                                         {
-                                            key: 'screenshot', title: 'Proof', render: (row) => row.payment_screenshot_path ? (
+                                            key: 'screenshot', title: 'Proof', render: (row) => (row.payment_screenshot_url || row.payment_screenshot_path) ? (
                                                 <button
-                                                    onClick={() => setScreenshotModal({ isOpen: true, url: row.payment_screenshot_path })}
+                                                    onClick={() => setScreenshotModal({ isOpen: true, url: row.payment_screenshot_url || row.payment_screenshot_path })}
                                                     className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 text-sm font-medium"
                                                 >
                                                     <Eye className="h-4 w-4" /> View
@@ -1059,6 +1064,26 @@ export default function CoordinatorEventManage() {
                             alt="Payment Screenshot"
                             className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* Profile View Modal */}
+            {selectedProfile && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfile(null)}>
+                    <div className="flex min-h-screen items-center justify-center p-4">
+                        <div
+                            className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                onClick={() => setSelectedProfile(null)}
+                                className="sticky top-4 right-4 float-right z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition"
+                            >
+                                <XIcon className="h-5 w-5" />
+                            </button>
+                            <ProfilePage profileId={selectedProfile.id} role={selectedProfile.role} isViewOnly={true} />
+                        </div>
                     </div>
                 </div>
             )}
