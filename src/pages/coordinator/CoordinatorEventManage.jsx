@@ -112,7 +112,7 @@ export default function CoordinatorEventManage() {
 
     const fetchPayments = async () => {
         setLoadingPayments(true)
-        console.log('Fetching payments for event:', id)
+        console.log('📋 Fetching payments for event:', id)
 
         // Fetch ONLY pending registrations
         const { data, error } = await supabase
@@ -122,30 +122,34 @@ export default function CoordinatorEventManage() {
             .eq('status', 'pending') // ONLY pending payments
             .order('registered_at', { ascending: false })
 
+        console.log('📊 Query result:', { count: data?.length, error })
+
         if (error) {
-            console.error('Error fetching payments:', error)
+            console.error('❌ Error fetching payments:', error)
             setPayments([])
         } else {
-            console.log('Fetched pending payments:', data?.length)
-
+            console.log('✅ Fetched pending payments:', data?.length)
+            
             // Generate public URLs for payment screenshots
             const paymentsWithUrls = (data || []).map(payment => {
                 if (payment.payment_screenshot_path) {
+                    // Get public URL from storage
                     const { data: urlData } = supabase.storage
                         .from('payment_proofs')
                         .getPublicUrl(payment.payment_screenshot_path)
-
-                    console.log('Screenshot URL generated:', {
-                        path: payment.payment_screenshot_path,
-                        publicUrl: urlData.publicUrl
+                    
+                    console.log('🖼️ Screenshot URL:', {
+                        original_path: payment.payment_screenshot_path,
+                        generated_url: urlData.publicUrl,
+                        user: payment.user?.full_name
                     })
-
+                    
                     return { ...payment, payment_screenshot_url: urlData.publicUrl }
                 }
                 return payment
             })
-
-            console.log('Payments with URLs:', paymentsWithUrls)
+            
+            console.log('💾 Final payments with URLs:', paymentsWithUrls.length)
             setPayments(paymentsWithUrls)
         }
 
