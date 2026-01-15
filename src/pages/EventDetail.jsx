@@ -16,8 +16,9 @@ export default function EventDetail() {
     const [registration, setRegistration] = useState(null)
     const [festSettings, setFestSettings] = useState(null)
 
-    // Detect if we're in student context
+    // Detect context
     const isStudentContext = location.pathname.startsWith('/student')
+    const isCoordinatorContext = location.pathname.startsWith('/coordinator')
 
     useEffect(() => {
         fetchFestSettings()
@@ -92,8 +93,8 @@ export default function EventDetail() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-end">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pb-8">
                         <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-lg ${event.category === 'Cultural' ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20' :
-                                event.category === 'Technical' ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-600/20' :
-                                    'bg-green-100 text-green-800 ring-1 ring-green-600/20'
+                            event.category === 'Technical' ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-600/20' :
+                                'bg-green-100 text-green-800 ring-1 ring-green-600/20'
                             }`}>
                             {event.category}
                         </span>
@@ -214,7 +215,15 @@ export default function EventDetail() {
                                     </div>
                                 ) : user ? (
                                     <button
-                                        onClick={() => navigate(isStudentContext ? `/student/events/${id}/register` : `/events/${id}/register`)}
+                                        onClick={() => {
+                                            if (isStudentContext) {
+                                                navigate(`/student/events/${id}/register`)
+                                            } else if (isCoordinatorContext) {
+                                                navigate(`/coordinator/browse-events/${id}/register`)
+                                            } else {
+                                                navigate(`/events/${id}/register`)
+                                            }
+                                        }}
                                         disabled={!event.is_active}
                                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
                                     >

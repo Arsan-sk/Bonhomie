@@ -257,8 +257,8 @@ export default function EventRegistration() {
                                 </div>
                             )}
                             {event.payment_mode === 'online' && (
-                                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                                    <p className="text-sm text-blue-700">📱 This event accepts online payments only</p>
+                                <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
+                                    <p className="text-sm text-indigo-700">📱 This event accepts online payments only</p>
                                 </div>
                             )}
 
@@ -276,7 +276,7 @@ export default function EventRegistration() {
                                     type="button"
                                     onClick={() => setPaymentMode('hybrid')}
                                     disabled={event.payment_mode === 'cash'}
-                                    className={`p-3 border-2 rounded-lg text-sm font-medium transition ${paymentMode === 'hybrid' ? 'border-primary bg-blue-50 text-primary' : 'border-gray-200'
+                                    className={`p-3 border-2 rounded-lg text-sm font-medium transition ${paymentMode === 'hybrid' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200'
                                         } ${event.payment_mode === 'cash' ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 >
                                     📱 Online (UPI)
@@ -296,10 +296,9 @@ export default function EventRegistration() {
                             </div>
                         )}
 
-                        {/* Hybrid Mode - Payment Info with QR */}
                         {paymentMode === 'hybrid' && (
-                            <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-                                <h4 className="text-sm font-medium text-blue-800 mb-2">Payment Details</h4>
+                            <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100">
+                                <h4 className="text-sm font-medium text-indigo-800 mb-2">Payment Details</h4>
 
                                 {/* QR Code Display */}
                                 {event.qr_code_path && (
@@ -312,11 +311,11 @@ export default function EventRegistration() {
                                     </div>
                                 )}
 
-                                <p className="text-sm text-blue-700">
+                                <p className="text-sm text-indigo-700">
                                     Registration Fee: <strong className="text-lg">₹{event.fee}</strong>
                                 </p>
-                                <p className="text-sm text-blue-700 mt-1">
-                                    Pay to UPI ID: <strong className="font-mono bg-blue-100 px-1 rounded">
+                                <p className="text-sm text-indigo-700 mt-1">
+                                    Pay to UPI ID: <strong className="font-mono bg-indigo-100 px-1 rounded">
                                         {event.upi_id || 'bonhomei@upi'}
                                     </strong>
                                 </p>
@@ -445,7 +444,7 @@ export default function EventRegistration() {
                             <button
                                 type="submit"
                                 disabled={uploading}
-                                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                             >
                                 {uploading ? (
                                     <>
