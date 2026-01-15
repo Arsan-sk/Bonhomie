@@ -79,7 +79,7 @@ export default function StudentEvents({ baseUrl = '/student/events' }) {
                         </div>
                         <input
                             type="text"
-                            className="block w-full rounded-md border-0 py-1.5 pl-10 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6"
+                            className="block w-full rounded-lg border-0 py-2.5 pl-10 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 transition-all"
                             placeholder="Search events..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -93,7 +93,7 @@ export default function StudentEvents({ baseUrl = '/student/events' }) {
                         <select
                             value={selectedSubcategory}
                             onChange={(e) => setSelectedSubcategory(e.target.value)}
-                            className="block w-full rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-primary sm:text-sm sm:leading-6"
+                            className="block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 transition-all"
                         >
                             {SUBCATEGORIES.map((sub) => (
                                 <option key={sub} value={sub}>{sub}</option>
@@ -111,9 +111,9 @@ export default function StudentEvents({ baseUrl = '/student/events' }) {
                                 onClick={() => setSelectedCategory(category)}
                                 className={clsx(
                                     selectedCategory === category
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
-                                    'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium'
+                                        ? 'border-indigo-600 text-indigo-600 font-semibold'
+                                        : 'border-transparent text-gray-500 hover:border-indigo-300 hover:text-indigo-700',
+                                    'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-all'
                                 )}
                             >
                                 {category}
@@ -126,7 +126,7 @@ export default function StudentEvents({ baseUrl = '/student/events' }) {
                 <div className="mt-12">
                     {loading ? (
                         <div className="flex justify-center">
-                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                            <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
                         </div>
                     ) : filteredEvents.length > 0 ? (
                         <div className="grid gap-8 mx-auto mt-8 sm:grid-cols-2 lg:grid-cols-3">

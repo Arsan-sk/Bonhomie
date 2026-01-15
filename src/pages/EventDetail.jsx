@@ -79,21 +79,25 @@ export default function EventDetail() {
 
     return (
         <div className="bg-white min-h-screen pb-12">
-            {/* Hero Image */}
-            <div className="relative h-64 sm:h-80 lg:h-96 w-full">
+            {/* Hero Image - Enhanced */}
+            <div className="relative h-64 sm:h-80 lg:h-96 w-full overflow-hidden">
                 <img
                     src={event.image_path || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'}
                     alt={event.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                        e.target.src = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
+                    }}
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-end">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pb-8">
-                        <span className={`inline-flex items-center rounded-full px-3 py-0.5 text-sm font-medium ${event.category === 'Cultural' ? 'bg-purple-100 text-purple-800' :
-                            event.category === 'Technical' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-lg ${event.category === 'Cultural' ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20' :
+                                event.category === 'Technical' ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-600/20' :
+                                    'bg-green-100 text-green-800 ring-1 ring-green-600/20'
                             }`}>
                             {event.category}
                         </span>
-                        <h1 className="mt-2 text-4xl font-bold text-white sm:text-5xl">{event.name}</h1>
+                        <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl drop-shadow-lg">{event.name}</h1>
                     </div>
                 </div>
             </div>
@@ -192,7 +196,7 @@ export default function EventDetail() {
                                     </div>
                                 </div>
                                 <div className="flex items-start">
-                                    <div className="font-bold text-xl text-primary ml-8">
+                                    <div className="font-bold text-2xl text-indigo-600 ml-8">
                                         ₹{event.fee}
                                     </div>
                                 </div>
@@ -212,7 +216,7 @@ export default function EventDetail() {
                                     <button
                                         onClick={() => navigate(isStudentContext ? `/student/events/${id}/register` : `/events/${id}/register`)}
                                         disabled={!event.is_active}
-                                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
                                     >
                                         {event.is_active ? 'Register Now' : 'Registration Closed'}
                                     </button>
