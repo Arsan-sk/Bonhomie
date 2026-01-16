@@ -163,12 +163,34 @@ export default function AdminEvents() {
 
     const handleDeleteEvent = async (event) => {
         if (!event) return
-        if (!window.confirm(`Are you sure you want to delete "${event.name}"? This action cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to delete "${event.name}"? This will also delete all registrations and assignments for this event. This action cannot be undone.`)) {
             return
         }
 
         try {
-            // Delete event from events table
+            // Step 1: Delete all registrations for this event
+            const { error: regError } = await supabase
+                .from('registrations')
+                .delete()
+                .eq('event_id', event.id)
+
+            if (regError) {
+                console.error('Error deleting registrations:', regError)
+                // Continue anyway - might not have any registrations
+            }
+
+            // Step 2: Delete all event assignments
+            const { error: assignError } = await supabase
+                .from('event_assignments')
+                .delete()
+                .eq('event_id', event.id)
+
+            if (assignError) {
+                console.error('Error deleting assignments:', assignError)
+                // Continue anyway
+            }
+
+            // Step 3: Now delete the event itself
             const { error } = await supabase
                 .from('events')
                 .delete()
