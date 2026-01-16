@@ -114,10 +114,10 @@ export default function CoordinatorEventManage() {
         setLoadingPayments(true)
         console.log('📋 Fetching payments for event:', id)
 
-        // Fetch ONLY pending registrations WITH team_members field
+        // Fetch ONLY pending registrations
         const { data, error } = await supabase
             .from('registrations')
-            .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, team_members, user:profiles(id, full_name, college_email, roll_number)`)
+            .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, user:profiles(id, full_name, college_email, roll_number)`)
             .eq('event_id', id)
             .eq('status', 'pending') // ONLY pending payments
             .order('registered_at', { ascending: false })
@@ -130,22 +130,8 @@ export default function CoordinatorEventManage() {
         } else {
             console.log('✅ Fetched pending payments:', data?.length)
 
-            // Filter to show ONLY team leaders for group events
-            // Leaders have team_members array with length > 0
-            // Individual participants have empty array or no payment needed here
-            const leadersOnly = (data || []).filter(payment => {
-                // If event is group event, show only leaders (those with team_members)
-                // If event is individual, show all
-                if (event?.subcategory?.toLowerCase() === 'group') {
-                    return payment.team_members && payment.team_members.length > 0
-                }
-                return true // Show all for individual events
-            })
-
-            console.log('👥 Filtered to leaders only:', { before: data?.length, after: leadersOnly.length })
-
             // Generate public URLs for payment screenshots
-            const paymentsWithUrls = leadersOnly.map(payment => {
+            const paymentsWithUrls = (data || []).map(payment => {
                 if (payment.payment_screenshot_path) {
                     // Get public URL from storage
                     const { data: urlData } = supabase.storage

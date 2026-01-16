@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { Link } from 'react-router-dom'
 import EventForm from '../../components/events/EventForm'
 import { showToast } from '../../components/ui/Toast'
+import EventCard from '../../components/events/EventCard'
 
 export default function CoordinatorEvents() {
     const { user } = useAuth()
@@ -12,10 +13,24 @@ export default function CoordinatorEvents() {
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [isModalOpen, setIsModalOpen] = useState(false)
+    const [festSettings, setFestSettings] = useState(null)
 
     useEffect(() => {
+        fetchFestSettings()
         if (user) fetchMyEvents()
     }, [user])
+
+    const fetchFestSettings = async () => {
+        try {
+            const { data } = await supabase
+                .from('global_settings')
+                .select('*')
+                .single()
+            setFestSettings(data)
+        } catch (error) {
+            console.error('Error fetching fest settings:', error)
+        }
+    }
 
     const fetchMyEvents = async () => {
         setLoading(true)
@@ -70,53 +85,6 @@ export default function CoordinatorEvents() {
         ev?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-    const EventCard = ({ event }) => (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col h-full">
-            <div className="h-48 overflow-hidden relative">
-                <img
-                    src={event.image_path || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80'}
-                    alt={event.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-wide shadow-sm">
-                    {event.category}
-                </div>
-            </div>
-
-            <div className="p-6 flex-1 flex flex-col">
-                <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{event.name}</h3>
-                    <p className="text-gray-500 text-sm line-clamp-2 mb-4">{event.description}</p>
-
-                    <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-gray-400" />
-                            <span>{event.day} • {event.time || 'TBA'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-gray-400" />
-                            <span>{event.venue || 'TBA'}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-gray-100 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
-                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                        Live
-                    </span>
-
-                    <Link
-                        to={`/coordinator/events/${event.id}`}
-                        className="flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                    >
-                        Manage <ArrowRight className="h-4 w-4" />
-                    </Link>
-                </div>
-            </div>
-        </div>
-    )
-
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -158,7 +126,7 @@ export default function CoordinatorEvents() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredEvents.map(event => (
-                        <EventCard key={event.id} event={event} />
+                        <EventCard key={event.id} event={event} baseUrl="/coordinator/events" festSettings={festSettings} />
                     ))}
                 </div>
             )}

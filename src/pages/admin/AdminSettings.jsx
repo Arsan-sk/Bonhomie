@@ -52,10 +52,13 @@ export default function AdminSettings() {
             const { error } = await supabase
                 .from('global_settings')
                 .upsert({
+                    id: 1, // Singleton - always update row with id=1
                     fest_name: settings.fest_name,
                     fest_start_date: settings.fest_start_date,
                     fest_duration_days: parseInt(settings.fest_duration_days),
                     updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'id' // Specify conflict column
                 })
 
             if (error) throw error

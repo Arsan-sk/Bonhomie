@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
-import { formatEventDate } from '../lib/dateUtils'
+import { formatEventDate, formatTime12Hour } from '../lib/dateUtils'
 
 export default function EventDetail() {
     const { id } = useParams()
@@ -177,7 +177,10 @@ export default function EventDetail() {
                                 <div className="flex items-start">
                                     <Clock className="h-5 w-5 text-gray-400 mt-0.5 mr-3" />
                                     <div>
-                                        <p className="font-medium text-gray-900">{event.start_time ? event.start_time.slice(0, 5) : 'TBA'} - {event.end_time ? event.end_time.slice(0, 5) : 'TBA'}</p>
+                                        <p className="font-medium text-gray-900">
+                                            {event.start_time ? formatTime12Hour(event.start_time) : 'TBA'}
+                                            {event.end_time && ` - ${formatTime12Hour(event.end_time)}`}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-start">

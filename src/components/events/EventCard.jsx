@@ -1,8 +1,17 @@
 import { Link } from 'react-router-dom'
 import { Calendar, MapPin, Clock } from 'lucide-react'
 import { format } from 'date-fns'
+import { formatEventDate, formatTime12Hour } from '../../lib/dateUtils'
 
-export default function EventCard({ event, baseUrl = '/events' }) {
+export default function EventCard({ event, baseUrl = '/events', festSettings }) {
+    // Debug logging
+    if (!festSettings) {
+        console.warn('EventCard: festSettings is missing', { event: event.name })
+    }
+    if (!event.day_order) {
+        console.warn('EventCard: day_order is missing', { event: event.name })
+    }
+
     return (
         <div className="flex flex-col overflow-hidden rounded-xl shadow-lg bg-white hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] border border-gray-100">
             <div className="flex-shrink-0 relative overflow-hidden">
@@ -20,8 +29,8 @@ export default function EventCard({ event, baseUrl = '/events' }) {
                             {event.category}
                         </p>
                         <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${event.subcategory === 'Individual'
-                                ? 'bg-green-100 text-green-800 ring-1 ring-green-600/20'
-                                : 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20'
+                            ? 'bg-green-100 text-green-800 ring-1 ring-green-600/20'
+                            : 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20'
                             }`}>
                             {event.subcategory}
                         </span>
@@ -35,8 +44,15 @@ export default function EventCard({ event, baseUrl = '/events' }) {
                     <div className="flex-shrink-0">
                         <div className="flex space-x-4 text-sm text-gray-500">
                             <div className="flex items-center">
+                                <Calendar className="mr-1.5 h-4 w-4 flex-shrink-0 text-indigo-500" aria-hidden="true" />
+                                {festSettings && event.day_order
+                                    ? formatEventDate(event.day_order, festSettings.fest_start_date)
+                                    : 'TBA'
+                                }
+                            </div>
+                            <div className="flex items-center">
                                 <Clock className="mr-1.5 h-4 w-4 flex-shrink-0 text-indigo-500" aria-hidden="true" />
-                                {event.start_time ? event.start_time.slice(0, 5) : 'TBA'}
+                                {event.start_time ? formatTime12Hour(event.start_time) : 'TBA'}
                             </div>
                             <div className="flex items-center">
                                 <MapPin className="mr-1.5 h-4 w-4 flex-shrink-0 text-indigo-500" aria-hidden="true" />

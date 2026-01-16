@@ -128,7 +128,7 @@ export default function Events() {
                     ) : filteredEvents.length > 0 ? (
                         <div className="grid gap-8 mx-auto mt-8 sm:grid-cols-2 lg:grid-cols-3">
                             {filteredEvents.map((event) => (
-                                <EventCard key={event.id} event={event} />
+                                <EventCard key={event.id} event={event} festSettings={festSettings} />
                             ))}
                         </div>
                     ) : (

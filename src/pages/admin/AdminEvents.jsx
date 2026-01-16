@@ -163,15 +163,12 @@ export default function AdminEvents() {
 
     const handleDeleteEvent = async (event) => {
         if (!event) return
-
-        if (!confirm(`Delete "${event.name}"? This will permanently delete the event and all related data (assignments, registrations). This cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to delete "${event.name}"? This action cannot be undone.`)) {
             return
         }
 
         try {
-            console.log('Deleting event:', event.id)
-
-            // Delete event (cascade will handle assignments and registrations)
+            // Delete event from events table
             const { error } = await supabase
                 .from('events')
                 .delete()
@@ -179,11 +176,13 @@ export default function AdminEvents() {
 
             if (error) throw error
 
-            showToast('Event deleted successfully!', 'success')
-            await fetchEvents()
+            alert('Event deleted successfully!')
+
+            // Refresh the events list
+            fetchEvents()
         } catch (error) {
             console.error('Error deleting event:', error)
-            showToast('Failed to delete event: ' + (error.message || 'Unknown error'), 'error')
+            alert(`Failed to delete event: ${error.message}`)
         }
     }
 
