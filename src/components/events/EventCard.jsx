@@ -45,10 +45,7 @@ export default function EventCard({ event, baseUrl = '/events', festSettings }) 
                         <div className="flex space-x-4 text-sm text-gray-500">
                             <div className="flex items-center">
                                 <Calendar className="mr-1.5 h-4 w-4 flex-shrink-0 text-indigo-500" aria-hidden="true" />
-                                {festSettings && event.day_order
-                                    ? formatEventDate(event.day_order, festSettings.fest_start_date)
-                                    : 'TBA'
-                                }
+                                {event.day || 'TBA'}
                             </div>
                             <div className="flex items-center">
                                 <Clock className="mr-1.5 h-4 w-4 flex-shrink-0 text-indigo-500" aria-hidden="true" />
