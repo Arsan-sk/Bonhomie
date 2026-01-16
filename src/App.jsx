@@ -43,6 +43,7 @@ import { AuthProvider } from './context/AuthContext'
 function App() {
   return (
     <AuthProvider>
+      <div id="top"></div>
       <Routes>
         {/* Public & Student Routes wrapped in Main Layout */}
         <Route element={<Layout><Outlet /></Layout>}>

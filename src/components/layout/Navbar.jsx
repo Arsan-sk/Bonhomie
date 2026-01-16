@@ -1,13 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { Menu, X, User, LogOut } from 'lucide-react'
-import { useState } from 'react'
+import { Menu, X, LogOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 
 export default function Navbar() {
     const { user, profile, signOut, isAdmin, isFaculty } = useAuth()
     const navigate = useNavigate()
     const [isOpen, setIsOpen] = useState(false)
+    const [scrolled, setScrolled] = useState(false)
 
     const handleSignOut = async () => {
         await signOut()
@@ -16,114 +17,168 @@ export default function Navbar() {
 
     const navLinks = [
         { name: 'Events', path: '/events' },
-        ...(user ? [{ name: 'Dashboard', path: isAdmin ? '/admin/dashboard' : isFaculty ? '/faculty/dashboard' : '/dashboard' }] : []),
+        ...(user
+            ? [{
+                name: 'Dashboard',
+                path: isAdmin
+                    ? '/admin/dashboard'
+                    : isFaculty
+                        ? '/faculty/dashboard'
+                        : '/dashboard'
+            }]
+            : []),
     ]
 
+    /* 🔹 SCROLL TRANSPARENCY EFFECT */
+    useEffect(() => {
+        const onScroll = () => {
+            setScrolled(window.scrollY > 20)
+        }
+        window.addEventListener('scroll', onScroll)
+        return () => window.removeEventListener('scroll', onScroll)
+    }, [])
+
     return (
-        <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <nav
+            className={clsx(
+                'sticky top-0 z-50 transition-all duration-300',
+                scrolled
+                    ? 'backdrop-blur-xl bg-white/20 shadow-md'
+                    : 'backdrop-blur-md bg-white/40'
+            )}
+        >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between h-16">
-                    <div className="flex">
-                        <Link to="/" className="flex-shrink-0 flex items-center">
-                            <span className="text-2xl font-bold text-primary">Bonhomie</span>
-                        </Link>
-                        <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                            {navLinks.map((link) => (
-                                <Link
-                                    key={link.name}
-                                    to={link.path}
-                                    className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                                >
-                                    {link.name}
-                                </Link>
-                            ))}
+                <div className="flex h-16 items-center justify-between">
+
+                    {/* Logo */}
+                    <Link to="/" className="flex items-center gap-3 group">
+                        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold shadow-md transition-transform duration-300 group-hover:scale-110">
+                            B
                         </div>
-                    </div>
-                    <div className="hidden sm:ml-6 sm:flex sm:items-center">
+                        <span className="text-xl font-extrabold tracking-tight text-primary transition-all duration-300 group-hover:tracking-wider">
+                            Bonhomie
+                        </span>
+                    </Link>
+
+                    {/* Desktop Nav */}
+                    <div className="hidden md:flex items-center gap-10">
+                        {navLinks.map(link => (
+                            <Link
+                                key={link.name}
+                                to={link.path}
+                                className="relative text-sm font-semibold text-gray-900 transition-all duration-300
+                                           after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-0
+                                           after:bg-primary after:transition-all after:duration-300
+                                           hover:after:w-full hover:text-primary"
+                            >
+                                {link.name}
+                            </Link>
+                        ))}
+
                         {user ? (
-                            <div className="flex items-center space-x-4">
+                            <div className="flex items-center gap-4">
                                 <Link
                                     to="/profile"
-                                    className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                    className="text-sm font-medium text-gray-900 hover:text-primary transition"
                                 >
-                                    <span className="text-sm text-gray-700">
-                                        {profile?.full_name || user.email}
-                                    </span>
-
+                                    {profile?.full_name || user.email}
                                 </Link>
                                 <button
                                     onClick={handleSignOut}
-                                    className="p-2 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none"
+                                    className="p-2 rounded-full hover:bg-white/40 transition"
                                 >
-                                    <LogOut className="h-5 w-5" />
+                                    <LogOut size={18} />
                                 </button>
                             </div>
                         ) : (
-                            <div className="flex space-x-4">
+                            <div className="flex items-center gap-4">
                                 <Link
                                     to="/login"
-                                    className="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                                    className="text-sm font-semibold text-gray-900 hover:text-primary transition"
                                 >
                                     Login
                                 </Link>
+
+                                {/* 🔥 Register Button with Fill Animation */}
                                 <Link
                                     to="/register"
-                                    className="bg-primary text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
+                                    className="relative overflow-hidden px-6 py-2 rounded-full
+                                               border-2 border-primary text-primary
+                                               font-semibold transition-colors duration-300
+                                               group"
                                 >
-                                    Register
+                                    <span className="relative z-10 group-hover:text-white transition-colors duration-300">
+                                        Register
+                                    </span>
+
+                                    {/* animated fill */}
+                                    <span
+                                        className="absolute inset-0 bg-primary
+                                                   origin-bottom-left scale-0
+                                                   group-hover:scale-100
+                                                   transition-transform duration-500
+                                                   ease-out"
+                                    />
                                 </Link>
                             </div>
                         )}
                     </div>
-                    <div className="-mr-2 flex items-center sm:hidden">
-                        <button
-                            onClick={() => setIsOpen(!isOpen)}
-                            className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none"
-                        >
-                            {isOpen ? <X className="block h-6 w-6" /> : <Menu className="block h-6 w-6" />}
-                        </button>
-                    </div>
+
+                    {/* Mobile Toggle */}
+                    <button
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="md:hidden p-2 rounded-lg hover:bg-white/40 transition"
+                    >
+                        {isOpen ? <X size={22} /> : <Menu size={22} />}
+                    </button>
                 </div>
             </div>
 
-            {/* Mobile menu */}
-            <div className={clsx('sm:hidden', isOpen ? 'block' : 'hidden')}>
-                <div className="pt-2 pb-3 space-y-1">
-                    {navLinks.map((link) => (
+            {/* Mobile Menu */}
+            <div
+                className={clsx(
+                    'md:hidden overflow-hidden transition-all duration-300',
+                    isOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
+                )}
+            >
+                <div className="px-4 pb-6 pt-3 space-y-2 bg-white/90 backdrop-blur-lg">
+                    {navLinks.map(link => (
                         <Link
                             key={link.name}
                             to={link.path}
-                            className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
                             onClick={() => setIsOpen(false)}
+                            className="block px-4 py-3 rounded-xl text-gray-900 font-medium hover:bg-primary/10 transition"
                         >
                             {link.name}
                         </Link>
                     ))}
+
                     {!user && (
                         <>
                             <Link
                                 to="/login"
-                                className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
                                 onClick={() => setIsOpen(false)}
+                                className="block px-4 py-3 rounded-xl text-gray-900 hover:bg-primary/10 transition"
                             >
                                 Login
                             </Link>
                             <Link
                                 to="/register"
-                                className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
                                 onClick={() => setIsOpen(false)}
+                                className="block px-4 py-3 rounded-xl bg-primary text-white text-center font-semibold shadow"
                             >
                                 Register
                             </Link>
                         </>
                     )}
+
                     {user && (
                         <button
                             onClick={() => {
                                 handleSignOut()
                                 setIsOpen(false)
                             }}
-                            className="block w-full text-left pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
+                            className="block w-full text-left px-4 py-3 rounded-xl text-gray-900 hover:bg-red-100 transition"
                         >
                             Sign Out
                         </button>
