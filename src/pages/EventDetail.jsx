@@ -14,15 +14,26 @@ export default function EventDetail() {
     const [event, setEvent] = useState(null)
     const [loading, setLoading] = useState(true)
     const [registration, setRegistration] = useState(null)
+    const [isRegistered, setIsRegistered] = useState(false)
     const [festSettings, setFestSettings] = useState(null)
+    const [coordinators, setCoordinators] = useState([])
+    const [selectedCoordinator, setSelectedCoordinator] = useState(null)
+    const [showCoordinatorModal, setShowCoordinatorModal] = useState(false)
+    const [registrationStats, setRegistrationStats] = useState({ total: 0, pending: 0, confirmed: 0, rejected: 0 })
+    const [activeTab, setActiveTab] = useState('description')
 
     // Detect context
     const isStudentContext = location.pathname.startsWith('/student')
     const isCoordinatorContext = location.pathname.startsWith('/coordinator')
 
     useEffect(() => {
+        fetchEvent()
         fetchFestSettings()
-        fetchEventDetails()
+        fetchCoordinators()
+        fetchRegistrationStats()
+        if (user) {
+            checkRegistration()
+        }
     }, [id, user])
 
     const fetchFestSettings = async () => {
@@ -33,11 +44,59 @@ export default function EventDetail() {
                 .single()
             setFestSettings(data)
         } catch (error) {
-            console.error('Error fetching fest settings:', error)
+            console.error('Error fetching settings:', error)
         }
     }
 
-    const fetchEventDetails = async () => {
+    const fetchCoordinators = async () => {
+        try {
+            console.log('Fetching coordinators for event:', id)
+
+            const { data, error } = await supabase
+                .from('event_assignments')
+                .select(`*, coordinator:profiles (id, full_name, college_email, phone, roll_number, department, year_of_study)`)
+                .eq('event_id', id)
+
+            console.log('Coordinators query result:', { data, error })
+
+            if (error) {
+                console.error('Error fetching coordinators:', error)
+                throw error
+            }
+
+            // Map the profiles from the nested structure  
+            const coordinatorsList = data?.map(assignment => assignment.coordinator).filter(Boolean) || []
+            console.log('Mapped coordinators:', coordinatorsList)
+
+            setCoordinators(coordinatorsList)
+        } catch (error) {
+            console.error('Error fetching coordinators:', error)
+            setCoordinators([])
+        }
+    }
+
+    const fetchRegistrationStats = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('registrations')
+                .select('status')
+                .eq('event_id', id)
+
+            if (error) throw error
+
+            const stats = {
+                total: data?.length || 0,
+                pending: data?.filter(r => r.status === 'pending').length || 0,
+                confirmed: data?.filter(r => r.status === 'confirmed').length || 0,
+                rejected: data?.filter(r => r.status === 'rejected').length || 0
+            }
+            setRegistrationStats(stats)
+        } catch (error) {
+            console.error('Error fetching registration stats:', error)
+        }
+    }
+
+    const fetchEvent = async () => {
         try {
             // Fetch event
             const { data: eventData, error: eventError } = await supabase
@@ -52,18 +111,6 @@ export default function EventDetail() {
 
             if (eventError) throw eventError
             setEvent(eventData)
-
-            // Fetch registration status if logged in
-            if (user) {
-                const { data: regData } = await supabase
-                    .from('registrations')
-                    .select('*')
-                    .eq('event_id', id)
-                    .eq('profile_id', user.id)
-                    .maybeSingle()
-
-                setRegistration(regData)
-            }
         } catch (error) {
             console.error('Error fetching event details:', error)
         } finally {
@@ -71,10 +118,27 @@ export default function EventDetail() {
         }
     }
 
+    const checkRegistration = async () => {
+        if (!user) return
+
+        try {
+            const { data: regData } = await supabase
+                .from('registrations')
+                .select('*')
+                .eq('event_id', id)
+                .eq('profile_id', user.id)
+                .maybeSingle()
+
+            setRegistration(regData)
+            setIsRegistered(!!regData)
+        } catch (error) {
+            console.error('Error checking registration status:', error)
+        }
+    }
+
     if (loading) return <div className="p-8 text-center">Loading...</div>
     if (!event) return <div className="p-8 text-center">Event not found</div>
 
-    const isRegistered = !!registration
     const isFull = event.capacity && event.registrations_count >= event.capacity // Note: Need to implement count logic or fetch separate count
     // For now assuming capacity check is server side or we ignore count for prototype
 
@@ -107,54 +171,108 @@ export default function EventDetail() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-8">
-                        <section>
-                            <h2 className="text-2xl font-bold text-gray-900">Description</h2>
-                            <p className="mt-4 text-gray-600 leading-relaxed">{event.description}</p>
-                        </section>
+                        {/* Description, Rules & Stats Section */}
+                        <section className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                            {/* Tab Navigation */}
+                            <div className="flex border-b border-gray-200">
+                                <button
+                                    onClick={() => setActiveTab('description')}
+                                    className={`flex-1 px-6 py-4 text-sm font-semibold transition-colors ${activeTab === 'description'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    Description
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('rules')}
+                                    className={`flex-1 px-6 py-4 text-sm font-semibold transition-colors ${activeTab === 'rules'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    Rules & Regulations
+                                </button>
+                            </div>
 
-                        <section>
-                            <h2 className="text-2xl font-bold text-gray-900">Rules & Regulations</h2>
-                            <ul className="mt-4 list-disc list-inside text-gray-600 space-y-2">
-                                {Array.isArray(event.rules) ? event.rules.map((rule, idx) => (
-                                    <li key={idx}>{typeof rule === 'string' ? rule : JSON.stringify(rule)}</li>
-                                )) : <li>See event details for rules.</li>}
-                            </ul>
-                        </section>
+                            {/* Tab Content */}
+                            <div className="p-6">
+                                {activeTab === 'description' && (
+                                    <div className="space-y-6">
+                                        <p className="text-gray-700 leading-relaxed">{event.description}</p>
 
-                        <section>
-                            <h2 className="text-2xl font-bold text-gray-900">Coordinators</h2>
-                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <h3 className="font-semibold text-gray-900">Faculty Coordinators</h3>
-                                    <ul className="mt-2 text-gray-600">
-                                        {Array.isArray(event.faculty_coordinators) && event.faculty_coordinators.map((c, i) => (
-                                            <li key={i}>{c.name} ({c.phone || 'N/A'})</li>
-                                        ))}
+                                        {/* Registration Stats */}
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900 mb-4">Registration Statistics</h3>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                                                    <div className="text-2xl font-bold text-blue-700">{registrationStats.total}</div>
+                                                    <div className="text-xs font-medium text-blue-600 mt-1">Total</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
+                                                    <div className="text-2xl font-bold text-yellow-700">{registrationStats.pending}</div>
+                                                    <div className="text-xs font-medium text-yellow-600 mt-1">Pending</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                                                    <div className="text-2xl font-bold text-green-700">{registrationStats.confirmed}</div>
+                                                    <div className="text-xs font-medium text-green-600 mt-1">Confirmed</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
+                                                    <div className="text-2xl font-bold text-red-700">{registrationStats.rejected}</div>
+                                                    <div className="text-xs font-medium text-red-600 mt-1">Rejected</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'rules' && (
+                                    <ul className="space-y-3">
+                                        {Array.isArray(event.rules) ? event.rules.map((rule, idx) => (
+                                            <li key={idx} className="flex items-start gap-3">
+                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold mt-0.5">{idx + 1}</span>
+                                                <span className="text-gray-700 flex-1">{typeof rule === 'string' ? rule : JSON.stringify(rule)}</span>
+                                            </li>
+                                        )) : <li className="text-gray-500">No specific rules defined for this event.</li>}
                                     </ul>
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold text-gray-900">Student Coordinators</h3>
-                                    <ul className="mt-2 text-gray-600">
-                                        {Array.isArray(event.student_coordinators) && event.student_coordinators.map((c, i) => (
-                                            <li key={i}>{c.name} ({c.phone || 'N/A'})</li>
-                                        ))}
-                                    </ul>
-                                </div>
+                                )}
                             </div>
                         </section>
 
-                        {/* Winners Section (if event over) */}
-                        {(event.winner || event.runnerup) && (
-                            <section className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
-                                <h2 className="text-2xl font-bold text-yellow-800 flex items-center">
-                                    <Trophy className="mr-2 h-6 w-6" /> Winners
-                                </h2>
-                                <div className="mt-4 space-y-2">
-                                    {event.winner && <p className="text-gray-800"><strong>Winner:</strong> {event.winner.full_name}</p>}
-                                    {event.runnerup && <p className="text-gray-800"><strong>Runner Up:</strong> {event.runnerup.full_name}</p>}
+                        {/* Coordinators Section */}
+                        <section className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Event Coordinators</h2>
+                            {coordinators.length > 0 ? (
+                                <div className="space-y-3">
+                                    {coordinators.map((coord) => (
+                                        <div
+                                            key={coord.id}
+                                            onClick={() => {
+                                                setSelectedCoordinator(coord)
+                                                setShowCoordinatorModal(true)
+                                            }}
+                                            className="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                                        >
+                                            <div className="flex-shrink-0">
+                                                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-md group-hover:scale-110 transition-transform">
+                                                    {coord.full_name?.charAt(0).toUpperCase()}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-base font-bold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">{coord.full_name}</p>
+                                                {coord.roll_number && (
+                                                    <p className="text-sm text-indigo-600 font-medium truncate mt-1">{coord.roll_number}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            </section>
-                        )}
+                            ) : (
+                                <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                    <p className="text-gray-500">No coordinators assigned yet.</p>
+                                </div>
+                            )}
+                        </section>
                     </div>
 
                     {/* Sidebar */}
@@ -243,9 +361,54 @@ export default function EventDetail() {
                             </div>
                         </div>
                     </div>
+                </div >
+            </div >
+            {/* Coordinator Profile Modal */}
+            {showCoordinatorModal && selectedCoordinator && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowCoordinatorModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center">
+                            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-3xl shadow-lg mb-4">
+                                {selectedCoordinator.full_name?.charAt(0).toUpperCase()}
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-1">{selectedCoordinator.full_name}</h3>
+                            {selectedCoordinator.roll_number && (
+                                <p className="text-sm font-medium text-indigo-600 mb-4">{selectedCoordinator.roll_number}</p>
+                            )}
+                        </div>
+                        <div className="space-y-3 mt-6">
+                            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                                <div className="text-gray-500 text-sm font-medium min-w-[80px]">Email:</div>
+                                <div className="text-gray-900 text-sm flex-1 break-all">{selectedCoordinator.college_email}</div>
+                            </div>
+                            {selectedCoordinator.phone && (
+                                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                                    <div className="text-gray-500 text-sm font-medium min-w-[80px]">Phone:</div>
+                                    <div className="text-gray-900 text-sm flex-1">{selectedCoordinator.phone}</div>
+                                </div>
+                            )}
+                            {selectedCoordinator.department && (
+                                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                                    <div className="text-gray-500 text-sm font-medium min-w-[80px]">Department:</div>
+                                    <div className="text-gray-900 text-sm flex-1">{selectedCoordinator.department}</div>
+                                </div>
+                            )}
+                            {selectedCoordinator.year_of_study && (
+                                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                                    <div className="text-gray-500 text-sm font-medium min-w-[80px]">Year:</div>
+                                    <div className="text-gray-900 text-sm flex-1">{selectedCoordinator.year_of_study}</div>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => setShowCoordinatorModal(false)}
+                            className="mt-6 w-full py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
                 </div>
-            </div>
-
-        </div>
+            )}
+        </div >
     )
 }

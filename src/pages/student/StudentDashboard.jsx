@@ -11,6 +11,7 @@ export default function StudentDashboard() {
     const [registrations, setRegistrations] = useState([])
     const [certificates, setCertificates] = useState([])
     const [notifications, setNotifications] = useState([])
+    const [totalEvents, setTotalEvents] = useState(0)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -18,6 +19,7 @@ export default function StudentDashboard() {
             fetchRegistrations()
             fetchCertificates()
             fetchNotifications()
+            fetchTotalEvents()
         }
     }, [user])
 
@@ -66,6 +68,19 @@ export default function StudentDashboard() {
             setNotifications(data || [])
         } catch (error) {
             console.error('Error fetching notifications:', error)
+        }
+    }
+
+    const fetchTotalEvents = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('events')
+                .select('id')
+
+            if (error) throw error
+            setTotalEvents(data?.length || 0)
+        } catch (error) {
+            console.error('Error fetching total events:', error)
         }
     }
 
@@ -129,26 +144,26 @@ export default function StudentDashboard() {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                            <Calendar className="h-6 w-6" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total</span>
-                    </div>
-                    <h3 className="text-3xl font-bold text-gray-900">{registrations.length}</h3>
-                    <p className="text-sm text-gray-500 mt-1">Registered Events</p>
-                </div>
-
                 <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
                     <div className="flex items-center justify-between mb-4">
                         <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
                             <Clock className="h-6 w-6" />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Upcoming</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Available</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-gray-900">{upcomingEvents.length}</h3>
-                    <p className="text-sm text-gray-500 mt-1">Upcoming Events</p>
+                    <h3 className="text-3xl font-bold text-gray-900">{totalEvents}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Total Events</p>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm hover:shadow-lg transition-all duration-200 group">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                            <Calendar className="h-6 w-6" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">My Events</span>
+                    </div>
+                    <h3 className="text-3xl font-bold text-gray-900">{registrations.length}</h3>
+                    <p className="text-sm text-gray-500 mt-1">Registered Events</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-green-100 shadow-sm hover:shadow-lg transition-all duration-200 group">

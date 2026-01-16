@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { TrendingUp, Users, Award, DollarSign, Calendar, Activity } from 'lucide-react'
+import { TrendingUp, Users, Award, DollarSign, Calendar, Activity, Download } from 'lucide-react'
+import {
+    generateIndividualParticipantsCSV,
+    generateTeamParticipantsCSV,
+    generatePaymentCSV,
+    arrayToCSV,
+    downloadCSV,
+    getFormattedDate
+} from '../../utils/csvExport'
 
 export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter = null }) {
     const [activeTab, setActiveTab] = useState('participation') // 'participation' or 'payment'
     const [loading, setLoading] = useState(true)
     const [selectedEvent, setSelectedEvent] = useState(eventIdFilter || null) // null = global, event_id = scoped
     const [events, setEvents] = useState([])
+    const [isExporting, setIsExporting] = useState(false)
+    const [exportType, setExportType] = useState('individual') // 'individual' or 'group'
 
     // Participation Stats
     const [stats, setStats] = useState({
@@ -182,6 +192,146 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
         }
     }
 
+    // Export handlers
+    const handleExportParticipants = async () => {
+        setIsExporting(true)
+        try {
+            // Fetch all registrations with full details
+            let query = supabase
+                .from('registrations')
+                .select(`
+                    id,
+                    status,
+                    team_members,
+                    profile:profiles(full_name, roll_number, college_email, school, department, year_of_study, gender, phone),
+                    event:events(id, name, category, subcategory)
+                `)
+                .eq('status', 'confirmed')
+
+            if (selectedEvent) {
+                query = query.eq('event_id', selectedEvent)
+            }
+
+            const { data, error } = await query
+
+            if (error) throw error
+
+            // Separate individual and team events
+            const individual = data.filter(reg => reg.event?.subcategory === 'Individual')
+            const team = data.filter(reg => reg.event?.subcategory === 'Group')
+
+            // Export based on selected type
+            if (exportType === 'individual') {
+                if (individual.length > 0) {
+                    const individualData = generateIndividualParticipantsCSV(individual)
+                    const headers = [
+                        { label: 'Event No' },
+                        { label: 'Event Name' },
+                        { label: 'Member No' },
+                        { label: 'Roll Number' },
+                        { label: 'Name' },
+                        { label: 'Email' },
+                        { label: 'School' },
+                        { label: 'Department' },
+                        { label: 'Year of Study' },
+                        { label: 'Gender' },
+                        { label: 'Phone' },
+                        { label: 'Category' }
+                    ]
+                    const csv = arrayToCSV(individualData, headers)
+                    const eventName = selectedEvent ? events.find(e => e.id === selectedEvent)?.name : 'all_events'
+                    downloadCSV(csv, `participants_individual_${eventName}_${getFormattedDate()}.csv`)
+                } else {
+                    alert('No individual event participant data available to export')
+                }
+            } else if (exportType === 'group') {
+                if (team.length > 0) {
+                    const teamData = generateTeamParticipantsCSV(team)
+                    const headers = [
+                        { label: 'Event No' },
+                        { label: 'Event Name' },
+                        { label: 'Team No' },
+                        { label: 'Member No' },
+                        { label: 'Roll Number' },
+                        { label: 'Name' },
+                        { label: 'Email' },
+                        { label: 'School' },
+                        { label: 'Department' },
+                        { label: 'Year of Study' },
+                        { label: 'Gender' },
+                        { label: 'Phone' },
+                        { label: 'Category' }
+                    ]
+                    const csv = arrayToCSV(teamData, headers)
+                    const eventName = selectedEvent ? events.find(e => e.id === selectedEvent)?.name : 'all_events'
+                    downloadCSV(csv, `participants_group_${eventName}_${getFormattedDate()}.csv`)
+                } else {
+                    alert('No group event participant data available to export')
+                }
+            }
+        } catch (error) {
+            console.error('Error exporting participants:', error)
+            alert('Failed to export participants data')
+        } finally {
+            setIsExporting(false)
+        }
+    }
+
+    const handleExportPayments = async () => {
+        setIsExporting(true)
+        try {
+            let query = supabase
+                .from('registrations')
+                .select(`
+                    id,
+                    status,
+                    transaction_id,
+                    payment_mode,
+                    team_members,
+                    registered_at,
+                    profile_id,
+                    event_id,
+                    profile:profiles(full_name),
+                    event:events(id, name, fee)
+                `)
+                .eq('status', 'confirmed')
+
+            if (selectedEvent) {
+                query = query.eq('event_id', selectedEvent)
+            }
+
+            const { data, error } = await query
+
+            if (error) throw error
+
+            if (data.length === 0) {
+                alert('No payment data available to export')
+                return
+            }
+
+            const paymentData = generatePaymentCSV(data)
+            const headers = [
+                { label: 'Event No' },
+                { label: 'Event Name' },
+                { label: 'Registration Type' },
+                { label: 'Participant Name' },
+                { label: 'Transaction ID' },
+                { label: 'Payment Mode' },
+                { label: 'Amount' },
+                { label: 'Status' },
+                { label: 'Payment Date' }
+            ]
+            const csv = arrayToCSV(paymentData, headers)
+            const eventName = selectedEvent ? events.find(e => e.id === selectedEvent)?.name : 'all_events'
+            downloadCSV(csv, `payments_${eventName}_${getFormattedDate()}.csv`)
+        } catch (error) {
+            console.error('Error exporting payments:', error)
+            alert('Failed to export payment data')
+        } finally {
+            setIsExporting(false)
+        }
+    }
+
     return (
         <div className="max-w-7xl mx-auto">
             {/* Header with Event Selector */}
@@ -192,16 +342,36 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                         Comprehensive insights into registrations and revenue
                     </p>
                 </div>
-                <select
-                    value={selectedEvent || ''}
-                    onChange={(e) => setSelectedEvent(e.target.value || null)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                >
-                    <option value="">All Events (Global)</option>
-                    {events.map(event => (
-                        <option key={event.id} value={event.id}>{event.name}</option>
-                    ))}
-                </select>
+                <div className="flex items-center gap-3">
+                    <select
+                        value={selectedEvent || ''}
+                        onChange={(e) => setSelectedEvent(e.target.value || null)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="">All Events (Global)</option>
+                        {events.map(event => (
+                            <option key={event.id} value={event.id}>{event.name}</option>
+                        ))}
+                    </select>
+                    {activeTab === 'participation' && (
+                        <select
+                            value={exportType}
+                            onChange={(e) => setExportType(e.target.value)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+                        >
+                            <option value="individual">Individual Events</option>
+                            <option value="group">Group Events</option>
+                        </select>
+                    )}
+                    <button
+                        onClick={activeTab === 'participation' ? handleExportParticipants : handleExportPayments}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+                    >
+                        <Download className="h-4 w-4" />
+                        {isExporting ? 'Exporting...' : 'Export'}
+                    </button>
+                </div>
             </div>
 
             {/* Tab Navigation */}

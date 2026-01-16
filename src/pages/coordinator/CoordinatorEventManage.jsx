@@ -220,31 +220,31 @@ export default function CoordinatorEventManage() {
             const isGroupEvent = event.subcategory?.toLowerCase() === 'group'
 
             if (isGroupEvent) {
-                // GROUP EVENT CSV
+                // GROUP EVENT CSV - Only process team leaders with team_members
                 csvContent += 'Team No,Member No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n'
 
                 let teamNumber = 0
-                registrations.forEach((reg) => {
+                // Filter to only team leaders (those with non-empty team_members array)
+                const teamLeaders = registrations.filter(reg => reg.team_members && reg.team_members.length > 0)
+                
+                teamLeaders.forEach((reg) => {
+                    teamNumber++
                     const teamMembers = reg.team_members || []
 
-                    if (teamMembers.length > 0) {
-                        teamNumber++
-
-                        // Team Leader (first member)
-                        const leader = reg.user
-                        if (leader) {
-                            csvContent += `${teamNumber},1,${escapeCSV(leader.roll_number)},${escapeCSV(leader.full_name)},${escapeCSV(leader.college_email)},${escapeCSV(leader.school)},${escapeCSV(leader.department)},${escapeCSV(leader.year_of_study)},${escapeCSV(leader.gender)},${escapeCSV(leader.phone)}\n`
-                        }
-
-                        // Team Members - leave team number blank for cleaner look
-                        teamMembers.forEach((member, idx) => {
-                            csvContent += `,${idx + 2},${escapeCSV(member.roll_number)},${escapeCSV(member.name)},${escapeCSV(member.email)},${escapeCSV(member.school)},${escapeCSV(member.department)},${escapeCSV(member.year_of_study)},${escapeCSV(member.gender)},${escapeCSV(member.phone)}\n`
-                        })
+                    // Team Leader (Member 1) - show team number
+                    const leader = reg.user
+                    if (leader) {
+                        csvContent += `${teamNumber},1,${escapeCSV(leader.roll_number)},${escapeCSV(leader.full_name)},${escapeCSV(leader.college_email)},${escapeCSV(leader.school)},${escapeCSV(leader.department)},${escapeCSV(leader.year_of_study)},${escapeCSV(leader.gender)},${escapeCSV(leader.phone)}\n`
                     }
+
+                    // Team Members (2, 3, ...) - blank team number for clean look
+                    teamMembers.forEach((member, idx) => {
+                        csvContent += `,${idx + 2},${escapeCSV(member.roll_number)},${escapeCSV(member.full_name || member.name)},${escapeCSV(member.college_email || member.email)},${escapeCSV(member.school)},${escapeCSV(member.department)},${escapeCSV(member.year_of_study)},${escapeCSV(member.gender)},${escapeCSV(member.phone)}\n`
+                    })
                 })
             } else {
-                // INDIVIDUAL EVENT CSV
-                csvContent += 'Serial No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n'
+                // INDIVIDUAL EVENT CSV - remove Serial No for consistency
+                csvContent += 'Member No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n'
 
                 registrations.forEach((reg, index) => {
                     const user = reg.user

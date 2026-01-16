@@ -8,7 +8,11 @@ import { Loader2 } from 'lucide-react'
 
 const registerSchema = z.object({
     full_name: z.string().min(2, 'Full name is required'),
-    email: z.string().email('Invalid email address'),
+    email: z.string()
+        .email('Invalid email address')
+        .refine((email) => email.endsWith('@aiktc.ac.in') || email.endsWith('@bonhomie.com'), {
+            message: 'Email must be from @aiktc.ac.in or @bonhomie.com domain'
+        }),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string(),
     roll_number: z.string().min(1, 'Roll number is required'),
@@ -47,12 +51,20 @@ export default function Register() {
         try {
             const { full_name, email, password, confirmPassword, ...profileData } = data
 
+            console.log('=== REGISTRATION DEBUG ===')
+            console.log('Email:', email)
+            console.log('Full Name:', full_name)
+            console.log('Profile Data:', profileData)
+            console.log('Metadata to send:', { full_name, role: 'student', ...profileData })
+
             // 1. Sign up user
             const { data: authData, error: authError } = await signUp(email, password, {
                 full_name,
                 role: 'student',
                 ...profileData
             })
+
+            console.log('Auth Response:', { authData, authError })
 
             if (authError) throw authError
 
@@ -68,7 +80,19 @@ export default function Register() {
             navigate('/')
         } catch (err) {
             console.error(err)
-            setError(err.message)
+            // Handle specific error cases
+            let errorMessage = err.message
+
+            // Check for duplicate email or roll number
+            if (err.message?.includes('profiles_college_email_unique')) {
+                errorMessage = 'This email is already registered. Please use a different email or try logging in.'
+            } else if (err.message?.includes('profiles_roll_number_unique')) {
+                errorMessage = 'This roll number is already registered. Please use a different roll number or contact admin.'
+            } else if (err.message?.includes('profiles_email_domain_check')) {
+                errorMessage = 'Email must be from @aiktc.ac.in or @bonhomie.com domain.'
+            }
+
+            setError(errorMessage)
         } finally {
             setIsLoading(false)
         }
