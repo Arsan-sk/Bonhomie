@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 import { Calendar, Users, Trophy } from "lucide-react";
 import bonhomieVideo from "../assets/bonhomie2k19.mp4";
 import EventsSection from "../pages/EventsSection.jsx";
@@ -6,6 +8,35 @@ import GlimpsesSection from "../pages/GlimpsesSection.jsx";
 import Incharge from "../pages/Incharge.jsx";
 
 export default function Landing() {
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect logged-in users to their dashboard
+  useEffect(() => {
+    if (!loading && user && profile) {
+      const role = profile.role;
+      if (role === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+      } else if (role === 'coordinator') {
+        navigate('/coordinator/dashboard', { replace: true });
+      } else if (role === 'student') {
+        navigate('/student/dashboard', { replace: true });
+      }
+    }
+  }, [user, profile, loading, navigate]);
+
+  // Show nothing while checking auth status
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="bg-white">
