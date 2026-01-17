@@ -24,7 +24,7 @@ export default function Navbar() {
                     ? '/admin/dashboard'
                     : isFaculty
                         ? '/faculty/dashboard'
-                        : '/dashboard'
+                        : '/student/dashboard'
             }]
             : []),
     ]
