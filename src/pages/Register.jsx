@@ -76,16 +76,10 @@ export default function Register() {
   // Watch the school field to update other dropdowns
   const selectedSchool = watch("school");
 
-  // Logic: Reset and Update dependent fields when school changes
+  // Update program field when school changes
   useEffect(() => {
     if (selectedSchool) {
-      // Automatically set the program based on school
       setValue("program", SCHOOL_CONFIG[selectedSchool].program);
-      // Clear previous selections to force user to pick from new list
-      setValue("department", "");
-      setValue("year_of_study", "");
-    } else {
-      setValue("program", "");
     }
   }, [selectedSchool, setValue]);
 
