@@ -18,6 +18,11 @@ import ProfilePage from './components/profile/ProfilePage'
 import CoordinatorShell from './components/coordinator/layout/CoordinatorShell'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 
+// Role-based Route Guards
+import AdminRoute from './components/AdminRoute'
+import CoordinatorRoute from './components/CoordinatorRoute'
+import StudentRoute from './components/StudentRoute'
+
 // Student Imports
 import StudentShell from './components/student/layout/StudentShell'
 import StudentDashboard from './pages/student/StudentDashboard'
@@ -61,41 +66,50 @@ function App() {
           <Route path="/403" element={<Forbidden />} />
         </Route>
 
-        {/* Student Routes (New Namespace with Sidebar) */}
-        <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><StudentShell /></ProtectedRoute>}>
+        {/* Student Dashboard - Protected */}
+        <Route path="/student" element={
+          <StudentRoute>
+            <StudentShell><Outlet /></StudentShell>
+          </StudentRoute>
+        }>
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="events" element={<StudentEvents />} />
-          <Route path="events/:id" element={<EventDetail />} />
-          <Route path="events/:id/register" element={<EventRegistration />} />
+          <Route path="myevents" element={<StudentMyEvents />} />
           <Route path="live" element={<StudentLive />} />
-          <Route path="my-events" element={<StudentMyEvents />} />
-          <Route path="profile" element={<ProfilePage role="student" />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
 
-        {/* Admin Routes with Sidebar (No Top Layout) */}
-        <Route path="/admin" element={<AdminShell />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
+        {/* Admin Dashboard - Protected (Admin Only) */}
+        <Route path="/admin" element={
+          <AdminRoute>
+            <AdminShell><Outlet /></AdminShell>
+          </AdminRoute>
+        }>
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="stats" element={<AdminStats />} />
           <Route path="events" element={<AdminEvents />} />
           <Route path="advanced-search" element={<AdminAdvancedSearch />} />
           <Route path="coordinators" element={<AdminCoordinators />} />
-          <Route path="students" element={<Navigate to="/admin/users" replace />} />
           <Route path="users" element={<AdminUsers />} />
-          <Route path="payments" element={<Navigate to="/admin/analytics" replace />} />
+          <Route path="payments" element={<AdminPayments />} />
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="certificates" element={<AdminCertificates />} />
-          <Route path="profile" element={<ProfilePage role="admin" />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
 
-        {/* Coordinator Routes - Role Normalized */}
-        <Route path="/coordinator" element={<ProtectedRoute allowedRoles={['coordinator']}><CoordinatorShell /></ProtectedRoute>}>
+        {/* Coordinator Dashboard - Protected */}
+        <Route path="/coordinator" element={
+          <CoordinatorRoute>
+            <CoordinatorShell><Outlet /></CoordinatorShell>
+          </CoordinatorRoute>
+        }>
           <Route path="dashboard" element={<CoordinatorDashboard />} />
           <Route path="events" element={<CoordinatorEvents />} />
           <Route path="events/:id" element={<CoordinatorEventManage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="analytics" element={<CoordinatorAnalytics />} />
-          <Route path="profile" element={<ProfilePage role="coordinator" />} />
           {/* Coordinator as Student Routes */}
           <Route path="browse-events" element={<StudentEvents baseUrl="/coordinator/browse-events" />} />
           <Route path="browse-events/:id" element={<EventDetail />} />
