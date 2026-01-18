@@ -17,12 +17,12 @@ export default function StudentLive() {
 
     const fetchLiveData = async () => {
         try {
-            // Fetch ongoing/live events
+            // Fetch live events (using is_live column)
             const { data: eventsData, error: eventsError } = await supabase
                 .from('events')
                 .select('*')
-                .in('status', ['live', 'ongoing'])
-                .order('day_order', { ascending: true })
+                .eq('is_live', true)
+                .order('live_started_at', { ascending: false })
 
             if (eventsError) throw eventsError
             setLiveEvents(eventsData || [])
@@ -127,18 +127,26 @@ export default function StudentLive() {
                                     <div className="space-y-2 text-sm text-gray-600">
                                         <div className="flex items-center">
                                             <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                            <span>{event.venue}</span>
+                                            <span>{event.venue || 'Venue TBA'}</span>
                                         </div>
                                         <div className="flex items-center">
                                             <Users className="h-4 w-4 mr-2 text-gray-400" />
                                             <span>{event.category}</span>
                                         </div>
+                                        {event.live_started_at && (
+                                            <div className="flex items-center">
+                                                <Clock className="h-4 w-4 mr-2 text-red-500" />
+                                                <span className="text-red-600 font-medium">
+                                                    Started {format(new Date(event.live_started_at), 'h:mm a')}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                     <a
                                         href={`/events/${event.id}`}
                                         className="mt-4 block w-full text-center px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium text-sm transition-colors"
                                     >
-                                        Watch Live
+                                        View Details
                                     </a>
                                 </div>
                             </div>
