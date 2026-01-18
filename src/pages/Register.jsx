@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
 import { Loader2 } from "lucide-react";
 
 // Configuration for dynamic fields mapping
@@ -96,19 +97,100 @@ export default function Register() {
       });
 
       if (authError) throw authError;
-      navigate("/");
+
+      // Fetch user profile to redirect to appropriate dashboard
+      const { data: profileResponse, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Profile fetch error after registration:", profileError);
+        // Default to student dashboard if profile fetch fails
+        navigate("/student/dashboard");
+        return;
+      }
+
+      // Role-based redirect after successful registration
+      const role = profileResponse?.role || "student";
+      if (role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (role === "coordinator") {
+        navigate("/coordinator/dashboard");
+      } else {
+        navigate("/student/dashboard");
+      }
     } catch (err) {
       console.error("Registration error:", err);
-      let errorMessage = "Registration failed. Please try again.";
-      const errorText = err.message?.toLowerCase() || "";
 
-      if (errorText.includes("email already registered")) {
-        errorMessage = "❌ This email is already registered.";
+      // Parse error and provide user-friendly messages
+      let errorMessage = "Registration failed. Please try again.";
+
+      // Check error object structure
+      const errorText = err.message?.toLowerCase() || "";
+      const errorCode = err.code || "";
+      const errorStatus = err.status || err.statusCode || "";
+
+      // Network and connection errors (common on mobile)
+      if (!navigator.onLine) {
+        errorMessage = "🌐 No internet connection. Please check your network and try again.";
+      } else if (errorText.includes("fetch") || errorText.includes("network") || errorText.includes("connection")) {
+        errorMessage = "🌐 Network error. Please check your internet connection and try again.";
+      } else if (errorText.includes("timeout") || errorText.includes("timed out")) {
+        errorMessage = "⏱️ Request timed out. Please try again with a stable connection.";
+      }
+      // Server errors
+      else if (errorStatus === 500 || errorText.includes("internal server") || errorText.includes("server error")) {
+        errorMessage = "❌ Server error. Please try again in a few moments.";
+      } else if (errorStatus === 503 || errorText.includes("service unavailable")) {
+        errorMessage = "❌ Service temporarily unavailable. Please try again later.";
+      }
+      // Specific error messages from database trigger
+      else if (errorText.includes("email already registered")) {
+        errorMessage = "❌ This email is already registered. Please use a different email or try logging in.";
       } else if (errorText.includes("roll number already registered")) {
-        errorMessage = "❌ This roll number is already registered.";
-      } else if (err.message && err.message.length < 150) {
+        errorMessage = "❌ This roll number is already registered. Please check your roll number or contact admin.";
+      } else if (errorText.includes("invalid email domain")) {
+        errorMessage = "❌ Invalid email domain. Only @aiktc.ac.in and @bonhomie.com emails are allowed.";
+      } else if (errorText.includes("missing required information")) {
+        errorMessage = "❌ Please fill in all required fields and try again.";
+      }
+      // Generic duplicate errors
+      else if (errorText.includes("duplicate") || errorText.includes("already exists") || errorCode === "23505") {
+        errorMessage = "❌ Email or Roll Number already exists. Please use different credentials.";
+      } else if (errorText.includes("user already registered")) {
+        errorMessage = "❌ Account already exists with this email. Try logging in instead.";
+      }
+      // Rate limiting
+      else if (errorText.includes("rate limit") || errorText.includes("too many") || errorStatus === 429) {
+        errorMessage = "⏳ Too many attempts. Please wait a few minutes and try again.";
+      }
+      // Password issues
+      else if (errorText.includes("password")) {
+        errorMessage = "🔒 Password must be at least 6 characters long.";
+      }
+      // Database constraint errors
+      else if (errorCode === "23503") {
+        errorMessage = "❌ Invalid reference data. Please contact support.";
+      } else if (errorCode === "23502") {
+        errorMessage = "❌ Missing required information. Please fill all fields.";
+      }
+      // Auth-specific errors
+      else if (errorText.includes("email not confirmed")) {
+        errorMessage = "📧 Please check your email to confirm your account.";
+      } else if (errorText.includes("invalid credentials")) {
+        errorMessage = "❌ Invalid email or password.";
+      }
+      // Show actual message if it's clear and short
+      else if (err.message && err.message.length < 150 && !errorText.includes("unexpected")) {
         errorMessage = `❌ ${err.message}`;
       }
+      // Generic fallback for unexpected errors
+      else if (errorText.includes("unexpected")) {
+        errorMessage = "❌ Unexpected error occurred. Please ensure all fields are filled correctly and try again. If the issue persists, contact support.";
+      }
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
