@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useLocation } from 'react-router-dom'
 import { Calendar, Trophy, Activity, Award } from 'lucide-react'
+import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
 
 export default function StudentMyEvents() {
     const { user } = useAuth()
@@ -101,9 +102,10 @@ export default function StudentMyEvents() {
                             {/* Event Image */}
                             <div className="h-48 overflow-hidden">
                                 <img
-                                    src={registration.event.image_path || 'https://via.placeholder.com/400x200'}
+                                    src={registration.event.image_path || getUnsplashImageUrl(registration.event.name, 400, 200)}
                                     alt={registration.event.name}
                                     className="w-full h-full object-cover"
+                                    onError={(e) => { e.target.src = getCategoryImage(registration.event.category) }}
                                 />
                             </div>
 

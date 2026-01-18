@@ -1,27 +1,22 @@
 import { Link } from 'react-router-dom'
 import { Calendar, MapPin, Clock } from 'lucide-react'
-import { format } from 'date-fns'
-import { formatEventDate, formatTime12Hour } from '../../lib/dateUtils'
+import { formatTime12Hour } from '../../lib/dateUtils'
+import EventImage from './EventImage'
 
 export default function EventCard({ event, baseUrl = '/events', festSettings }) {
-    // Debug logging
-    if (!festSettings) {
-        console.warn('EventCard: festSettings is missing', { event: event.name })
-    }
-    if (!event.day_order) {
-        console.warn('EventCard: day_order is missing', { event: event.name })
-    }
-
     return (
         <div className="flex flex-col overflow-hidden rounded-xl shadow-lg bg-white hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] border border-gray-100">
-            <div className="flex-shrink-0 relative overflow-hidden">
-                <img
-                    className="h-48 w-full object-cover transition-transform duration-300 hover:scale-105"
-                    src={event.image_path || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'}
-                    alt={event.name}
+            {/* Event Image with proper fallback */}
+            <div className="flex-shrink-0 relative overflow-hidden h-48">
+                <EventImage
+                    src={event.image_path}
+                    eventName={event.name}
+                    category={event.category}
+                    className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
             </div>
+
             <div className="flex flex-1 flex-col justify-between p-6">
                 <div className="flex-1">
                     <div className="flex items-center justify-between">
@@ -63,7 +58,7 @@ export default function EventCard({ event, baseUrl = '/events', festSettings }) 
                         to={`${baseUrl}/${event.id}`}
                         className="flex w-full items-center justify-center rounded-lg border border-transparent bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
                     >
-                        {baseUrl.includes('coordinator') ? 'Manage Event' : 'View Details'}
+                        {baseUrl.includes('/coordinator/events') && !baseUrl.includes('browse') ? 'Manage Event' : 'View Details'}
                     </Link>
                 </div>
             </div>

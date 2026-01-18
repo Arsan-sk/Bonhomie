@@ -6,6 +6,7 @@ import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
@@ -621,7 +622,12 @@ export default function CoordinatorEventManage() {
 
             {/* Banner - Responsive */}
             <div className="h-32 md:h-48 rounded-xl md:rounded-2xl overflow-hidden relative group">
-                <img src={event.image_path || 'https://via.placeholder.com/1200x300'} alt="" className="w-full h-full object-cover" />
+                <img 
+                    src={event.image_path || getUnsplashImageUrl(event.name, 1200, 300)} 
+                    alt={event.name} 
+                    className="w-full h-full object-cover" 
+                    onError={(e) => { e.target.src = getCategoryImage(event.category) }}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-3 md:bottom-6 left-3 md:left-6 text-white">
                     <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm font-medium opacity-90">

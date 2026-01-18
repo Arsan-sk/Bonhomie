@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle, UserCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { formatEventDate, formatTime12Hour } from '../lib/dateUtils'
+import { getUnsplashImageUrl, getCategoryImage } from '../utils/unsplashHelper'
 
 export default function EventDetail() {
     const { id } = useParams()
@@ -142,16 +143,27 @@ export default function EventDetail() {
     const isFull = event.capacity && event.registrations_count >= event.capacity // Note: Need to implement count logic or fetch separate count
     // For now assuming capacity check is server side or we ignore count for prototype
 
+    // Get event image with Unsplash fallback
+    const getEventImage = () => {
+        if (event.image_path && event.image_path.trim() !== '') {
+            return event.image_path
+        }
+        if (event.name) {
+            return getUnsplashImageUrl(event.name, 1350, 600)
+        }
+        return getCategoryImage(event.category)
+    }
+
     return (
         <div className="bg-white min-h-screen pb-12">
             {/* Hero Image - Enhanced */}
             <div className="relative h-64 sm:h-80 lg:h-96 w-full overflow-hidden">
                 <img
-                    src={event.image_path || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'}
+                    src={getEventImage()}
                     alt={event.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
+                        e.target.src = getCategoryImage(event.category)
                     }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-end">

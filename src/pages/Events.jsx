@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import EventCard from '../components/events/EventCard'
 import { Loader2, Search, Filter } from 'lucide-react'
 import clsx from 'clsx'
+import { useBatchEventImages } from '../hooks/useEventImage'
 
 const CATEGORIES = ['All', 'Cultural', 'Technical', 'Sports']
 const SUBCATEGORIES = ['All', 'Individual', 'Group']
@@ -14,6 +15,9 @@ export default function Events() {
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [festSettings, setFestSettings] = useState(null)
+
+    // Batch preload images for better performance
+    const { imageMap, isLoading: imagesLoading, loadedCount, totalCount } = useBatchEventImages(events, 3)
 
     useEffect(() => {
         fetchFestSettings()

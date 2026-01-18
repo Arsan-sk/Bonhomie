@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Activity, Trophy, Clock, Calendar, Users, Award } from 'lucide-react'
+import { Activity, Trophy, Clock, Calendar, Users, Award, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
+import { Link } from 'react-router-dom'
 
 export default function StudentLive() {
     const [liveEvents, setLiveEvents] = useState([])
@@ -17,7 +18,7 @@ export default function StudentLive() {
 
     const fetchLiveData = async () => {
         try {
-            // Fetch live events (using is_live column)
+            // Fetch live events
             const { data: eventsData, error: eventsError } = await supabase
                 .from('events')
                 .select('*')
@@ -81,9 +82,9 @@ export default function StudentLive() {
                 </div>
             </div>
 
-            {/* Ongoing Events Section */}
+            {/* Ongoing Events Section - SCROLLABLE */}
             <div className="mb-12">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
                     <Activity className="h-6 w-6 mr-2 text-purple-600" />
                     Happening Now
                 </h2>
@@ -95,62 +96,90 @@ export default function StudentLive() {
                         <p className="mt-2 text-gray-500">Check back soon for live updates!</p>
                     </div>
                 ) : (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {liveEvents.map((event) => (
-                            <div
-                                key={event.id}
-                                className="bg-white rounded-xl shadow-md overflow-hidden border-2 border-red-500 relative"
-                            >
-                                {/* Live Badge */}
-                                <div className="absolute top-4 right-4 z-10">
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white shadow-lg">
-                                        <span className="relative flex h-2 w-2 mr-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                                        </span>
-                                        LIVE
-                                    </span>
-                                </div>
-
-                                {/* Event Image */}
-                                <div className="h-40 overflow-hidden">
-                                    <img
-                                        src={event.image_path || 'https://via.placeholder.com/400x200'}
-                                        alt={event.name}
-                                        className="w-full h-full object-cover"
-                                    />
-                                </div>
-
-                                {/* Event Details */}
-                                <div className="p-6">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">{event.name}</h3>
-                                    <div className="space-y-2 text-sm text-gray-600">
-                                        <div className="flex items-center">
-                                            <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                            <span>{event.venue || 'Venue TBA'}</span>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <Users className="h-4 w-4 mr-2 text-gray-400" />
-                                            <span>{event.category}</span>
-                                        </div>
-                                        {event.live_started_at && (
-                                            <div className="flex items-center">
-                                                <Clock className="h-4 w-4 mr-2 text-red-500" />
-                                                <span className="text-red-600 font-medium">
-                                                    Started {format(new Date(event.live_started_at), 'h:mm a')}
+                    <div className="relative">
+                        {/* FIXED HEIGHT SCROLLABLE CONTAINER */}
+                        <div
+                            className="overflow-y-auto space-y-3 pr-2 custom-scrollbar"
+                            style={{ maxHeight: '600px' }}
+                        >
+                            {liveEvents.map((event) => (
+                                <Link
+                                    key={event.id}
+                                    to={`/student/events/${event.id}`}
+                                    className="block bg-white rounded-lg shadow-md hover:shadow-xl border-2 border-red-500 overflow-hidden transition-all duration-200 hover:scale-[1.01]"
+                                >
+                                    <div className="flex" style={{ height: '144px' }}>
+                                        {/* Image Section */}
+                                        <div className="relative flex-shrink-0" style={{ width: '192px' }}>
+                                            <img
+                                                src={event.image_path || 'https://via.placeholder.com/300x200'}
+                                                alt={event.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                            {/* Live Badge */}
+                                            <div className="absolute top-2 right-2">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-lg">
+                                                    <span className="relative flex h-1.5 w-1.5 mr-1">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                                                    </span>
+                                                    LIVE
                                                 </span>
                                             </div>
-                                        )}
+                                        </div>
+
+                                        {/* Content Section */}
+                                        <div className="flex-1 p-4 flex flex-col justify-between">
+                                            {/* Event Info */}
+                                            <div>
+                                                <h3 className="text-base font-bold text-gray-900 mb-1.5 line-clamp-1">
+                                                    {event.name}
+                                                </h3>
+
+                                                {/* Event Details */}
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                                                    <div className="flex items-center">
+                                                        <Calendar className="h-3.5 w-3.5 mr-1 text-purple-500" />
+                                                        <span>{event.category}</span>
+                                                    </div>
+
+                                                    {event.subcategory && (
+                                                        <span className="text-gray-400">• {event.subcategory}</span>
+                                                    )}
+
+                                                    <div className="flex items-center">
+                                                        <MapPin className="h-3.5 w-3.5 mr-1 text-purple-500" />
+                                                        <span className="line-clamp-1">{event.venue || 'TBA'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Bottom Row */}
+                                            <div className="flex items-center justify-between">
+                                                {event.live_started_at && (
+                                                    <div className="flex items-center text-xs">
+                                                        <Clock className="h-3.5 w-3.5 mr-1 text-red-500" />
+                                                        <span className="text-red-600 font-medium">
+                                                            {format(new Date(event.live_started_at), 'h:mm a')}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="px-3 py-1 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded text-xs font-semibold hover:from-red-600 hover:to-pink-600 transition-all shadow">
+                                                    View
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a
-                                        href={`/events/${event.id}`}
-                                        className="mt-4 block w-full text-center px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium text-sm transition-colors"
-                                    >
-                                        View Details
-                                    </a>
-                                </div>
+                                </Link>
+                            ))}
+                        </div>
+
+                        {/* Scroll indicator */}
+                        {liveEvents.length > 3 && (
+                            <div className="text-center mt-2 text-xs text-gray-500">
+                                Scroll to see more ({liveEvents.length} events live)
                             </div>
-                        ))}
+                        )}
                     </div>
                 )}
             </div>
@@ -180,7 +209,7 @@ export default function StudentLive() {
                                         <img
                                             src={event.image_path || 'https://via.placeholder.com/100'}
                                             alt={event.name}
-                                            className="w-20 h-20 rounded-lg object-cover"
+                                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
                                         />
 
                                         {/* Event Info */}

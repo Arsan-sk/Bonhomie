@@ -74,7 +74,9 @@ function App() {
         }>
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="events" element={<StudentEvents />} />
-          <Route path="myevents" element={<StudentMyEvents />} />
+          <Route path="events/:id" element={<EventDetail />} />
+          <Route path="events/:id/register" element={<EventRegistration />} />
+          <Route path="my-events" element={<StudentMyEvents />} />
           <Route path="live" element={<StudentLive />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>

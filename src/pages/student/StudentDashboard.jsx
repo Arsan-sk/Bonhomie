@@ -5,6 +5,7 @@ import { Loader2, Calendar, MapPin, Clock, CheckCircle, AlertCircle, Award, Bell
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import StatCard from '../../components/student/ui/StatCard'
+import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
 
 export default function StudentDashboard() {
     const { user, profile } = useAuth()
@@ -254,8 +255,9 @@ export default function StudentDashboard() {
                                             <div className="flex-shrink-0 h-16 w-16 rounded-md overflow-hidden">
                                                 <img
                                                     className="h-full w-full object-cover"
-                                                    src={reg.event.image_path || 'https://via.placeholder.com/150'}
+                                                    src={reg.event.image_path || getUnsplashImageUrl(reg.event.name, 150, 150)}
                                                     alt={reg.event.name}
+                                                    onError={(e) => { e.target.src = getCategoryImage(reg.event.category) }}
                                                 />
                                             </div>
                                             <div className="ml-4">
