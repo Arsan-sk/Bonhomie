@@ -48,17 +48,17 @@ export default function AdminUsers() {
                 <div className="font-medium text-gray-900">{row.full_name || 'N/A'}</div>
             )
         },
-        { key: 'email', title: 'Email', sortable: true },
+        { key: 'email', title: 'Email', sortable: true, render: (row) => row.college_email || 'N/A' },
         {
             key: 'role', title: 'Role', sortable: true, render: (row) => getRoleBadge(row.role)
         },
-        { key: 'phone_number', title: 'Phone', render: (row) => row.phone_number || 'N/A' },
+        { key: 'phone_number', title: 'Phone', render: (row) => row.phone || 'N/A' },
         {
             key: 'department', title: 'Department', sortable: true, render: (row) => (
                 <span className="text-sm text-gray-600">{row.department || 'General'}</span>
             )
         },
-        { key: 'year', title: 'Year', sortable: true, render: (row) => row.year || '-' }
+        { key: 'year', title: 'Year', sortable: true, render: (row) => row.year_of_study || '-' }
     ]
 
     const filteredUsers = users.filter(user => {

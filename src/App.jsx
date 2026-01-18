@@ -30,6 +30,7 @@ import AdminDashboard from './pages/dashboards/AdminDashboard'
 import AdminStats from './pages/dashboards/AdminStats'
 import AdminShell from './components/admin/layout/AdminShell'
 import AdminEvents from './pages/admin/AdminEvents'
+import AdminAdvancedSearch from './pages/admin/AdminAdvancedSearch'
 import AdminCoordinators from './pages/admin/AdminCoordinators'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminPayments from './pages/admin/AdminPayments'
@@ -76,6 +77,7 @@ function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="events" element={<AdminEvents />} />
+          <Route path="advanced-search" element={<AdminAdvancedSearch />} />
           <Route path="coordinators" element={<AdminCoordinators />} />
           <Route path="students" element={<Navigate to="/admin/users" replace />} />
           <Route path="users" element={<AdminUsers />} />
