@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { ArrowLeft, Edit2, Users, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
@@ -19,17 +19,8 @@ export default function CoordinatorEventManage() {
     const [loadingParticipants, setLoadingParticipants] = useState(false)
     const [participantSearch, setParticipantSearch] = useState('')
 
-    // Rounds State
-    const [rounds, setRounds] = useState([])
-    const [loadingRounds, setLoadingRounds] = useState(false)
-    const [isRoundModalOpen, setIsRoundModalOpen] = useState(false)
-    const [roundForm, setRoundForm] = useState({ name: '', type: 'elimination', sequence_order: 1 })
-
     // Results State
-    const [selectedRoundId, setSelectedRoundId] = useState('')
-    const [roundParticipants, setRoundParticipants] = useState([])
     const [loadingResults, setLoadingResults] = useState(false)
-    const [resultsView, setResultsView] = useState('manage') // 'manage' or 'leaderboard'
 
     // Payments State
     const [payments, setPayments] = useState([])
@@ -44,17 +35,8 @@ export default function CoordinatorEventManage() {
 
     useEffect(() => {
         if (activeTab === 'participants' || activeTab === 'analytics') fetchParticipants()
-        if (activeTab === 'rounds' || activeTab === 'results') fetchRounds()
         if (activeTab === 'payments') fetchPayments()
     }, [activeTab, id])
-
-    useEffect(() => {
-        if (selectedRoundId) {
-            fetchRoundParticipants(selectedRoundId)
-        } else if (activeTab === 'results' && rounds.length > 0 && !selectedRoundId) {
-            setSelectedRoundId(rounds[0].id)
-        }
-    }, [activeTab, selectedRoundId, rounds])
 
     const toggleTeamExpansion = (registrationId) => {
         setExpandedTeams(prev => {
@@ -86,29 +68,7 @@ export default function CoordinatorEventManage() {
         setLoadingParticipants(false)
     }
 
-    const fetchRounds = async () => {
-        setLoadingRounds(true)
-        const { data, error } = await supabase.from('rounds')
-            .select('*')
-            .eq('event_id', id)
-            .order('sequence_order', { ascending: true })
-        if (error) console.error(error)
-        else {
-            setRounds(data || [])
-            if (data && data.length > 0 && !selectedRoundId) setSelectedRoundId(data[0].id)
-        }
-        setLoadingRounds(false)
-    }
 
-    const fetchRoundParticipants = async (roundId) => {
-        setLoadingResults(true)
-        const { data, error } = await supabase.from('round_participants')
-            .select(`*, registration:registrations!registration_id(user:profiles(full_name))`)
-            .eq('round_id', roundId)
-        if (error) console.error(error)
-        else setRoundParticipants(data || [])
-        setLoadingResults(false)
-    }
 
     const fetchPayments = async () => {
         setLoadingPayments(true)
@@ -283,18 +243,7 @@ export default function CoordinatorEventManage() {
     }
 
 
-    const handleCreateRound = async () => {
-        const { error } = await supabase.from('rounds').insert([{ ...roundForm, event_id: id }])
-        if (error) alert('Error creating round')
-        else { setIsRoundModalOpen(false); fetchRounds() }
-    }
 
-    const handleDeleteRound = async (roundId) => {
-        if (!confirm("Delete this round?")) return
-        const { error } = await supabase.from('rounds').delete().eq('id', roundId)
-        if (error) alert("Error deleting round")
-        else fetchRounds()
-    }
 
     const handleRejectParticipant = async (registrationId) => {
         if (!confirm('Are you sure you want to reject this participant?')) return
@@ -303,24 +252,7 @@ export default function CoordinatorEventManage() {
         else fetchParticipants()
     }
 
-    const updateScore = async (rpId, score) => {
-        await supabase.from('round_participants').update({ score }).eq('id', rpId)
-    }
 
-    const promoteParticipant = async (rpId, status) => {
-        await supabase.from('round_participants').update({ status }).eq('id', rpId)
-        fetchRoundParticipants(selectedRoundId)
-    }
-
-    const populateRound1 = async () => {
-        if (!selectedRoundId) return
-        const { data: confirmed } = await supabase.from('registrations').select('id').eq('event_id', id).eq('status', 'confirmed')
-        if (!confirmed) return
-        const inserts = confirmed.map(r => ({ round_id: selectedRoundId, registration_id: r.id, status: 'pending' }))
-        const { error } = await supabase.from('round_participants').insert(inserts)
-        if (error) alert('Error populating participants')
-        else fetchRoundParticipants(selectedRoundId)
-    }
 
     const verifyPayment = async (registrationId) => {
         try {
@@ -368,38 +300,15 @@ export default function CoordinatorEventManage() {
         }
     }
 
-    const exportResults = () => {
-        if (roundParticipants.length === 0) {
-            alert('No participants to export')
-            return
-        }
 
-        // Sort by score descending
-        const sorted = [...roundParticipants]
-            .filter(rp => rp.status !== 'eliminated')
-            .sort((a, b) => (b.score || 0) - (a.score || 0))
-
-        const csv = sorted.map((rp, i) =>
-            `${i + 1},"${rp.registration?.user?.full_name || 'Unknown'}",${rp.registration?.user?.roll_number || '-'},${rp.score || 0},${rp.status}`
-        ).join('\n')
-
-        const blob = new Blob([`Rank,Name,Roll Number,Score,Status\n${csv}`], { type: 'text/csv' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${event.name}_results_${Date.now()}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-    }
 
     if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
     if (!event) return <div className="p-8 text-center">Event not found.</div>
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: Clock },
-        { id: 'payments', label: 'Payments', icon: DollarSign }, // Moved to 2nd position
+        { id: 'payments', label: 'Payments', icon: DollarSign },
         { id: 'participants', label: 'Participants', icon: Users },
-        { id: 'rounds', label: 'Rounds', icon: Trophy },
         { id: 'results', label: 'Results', icon: BarChart3 },
     ]
 
@@ -731,120 +640,15 @@ export default function CoordinatorEventManage() {
                             )}
                         </div>
                     )}
-                    {/* ROUNDS */}
-                    {activeTab === 'rounds' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Rounds Management</h3><p className="text-sm text-gray-500">Define the competition structure.</p></div>
-                                <button onClick={() => setIsRoundModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-md"><Plus className="h-4 w-4" /> Add Round</button>
-                            </div>
-                            {loadingRounds ? (<div className="text-center py-8">Loading Rounds...</div>) : rounds.length === 0 ? (<div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200"><Trophy className="h-10 w-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No rounds created yet.</p></div>) : (<div className="space-y-4">{rounds.map(round => (<div key={round.id} className="flex justify-between items-center p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"><div className="flex items-center gap-4"><div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">{round.sequence_order}</div><div><h4 className="font-bold text-gray-900">{round.name}</h4><p className="text-xs text-gray-500 uppercase">{round.type} • {round.status}</p></div></div><div className="flex gap-2"><button onClick={() => handleDeleteRound(round.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button></div></div>))}</div>)}
-                            {isRoundModalOpen && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-                                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Create Round</h3>
-                                        <div className="space-y-4"><AdminInput label="Round Name" placeholder="e.g. Qualification Round" value={roundForm.name} onChange={e => setRoundForm({ ...roundForm, name: e.target.value })} /><AdminInput label="Sequence Order" type="number" value={roundForm.sequence_order} onChange={e => setRoundForm({ ...roundForm, sequence_order: e.target.value })} /><AdminSelect label="Type" value={roundForm.type} onChange={e => setRoundForm({ ...roundForm, type: e.target.value })}><option value="elimination">Elimination</option><option value="scoring">Scoring (Points)</option><option value="final">Final</option></AdminSelect></div>
-                                        <div className="mt-6 flex justify-end gap-3"><button onClick={() => setIsRoundModalOpen(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancel</button><button onClick={handleCreateRound} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">Create Round</button></div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+
                     {/* RESULTS */}
                     {activeTab === 'results' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Score & Results</h3><p className="text-sm text-gray-500">Enter scores and view leaderboard.</p></div>
-                                <div className="flex gap-3">
-                                    {/* View Toggle */}
-                                    <div className="flex bg-gray-100 rounded-lg p-1">
-                                        <button onClick={() => setResultsView('manage')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'manage' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Manage Scores</button>
-                                        <button onClick={() => setResultsView('leaderboard')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'leaderboard' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Leaderboard</button>
-                                    </div>
-                                    <div className="w-64">
-                                        <AdminSelect value={selectedRoundId} onChange={e => setSelectedRoundId(e.target.value)}>
-                                            <option value="" disabled>Select Round</option>
-                                            {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                        </AdminSelect>
-                                    </div>
-                                </div>
+                            <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                <BarChart3 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Results Management</h3>
+                                <p className="text-gray-500">Results system will be implemented here.</p>
                             </div>
-
-                            {!selectedRoundId ? (
-                                <div className="text-center py-20 bg-gray-50 rounded-2xl"><p className="text-gray-500">Please select a round to manage results.</p></div>
-                            ) : (
-                                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                    {roundParticipants.length === 0 ? (
-                                        <div className="p-8 text-center">
-                                            <p className="text-gray-500 mb-4">No participants found in this round.</p>
-                                            <button onClick={populateRound1} className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100">Fetch Participants from Registrations</button>
-                                        </div>
-                                    ) : resultsView === 'leaderboard' ? (
-                                        // LEADERBOARD VIEW
-                                        (() => {
-                                            const ranked = [...roundParticipants]
-                                                .filter(rp => rp.status !== 'eliminated')
-                                                .sort((a, b) => (b.score || 0) - (a.score || 0))
-
-                                            return (
-                                                <div className="p-6 space-y-4">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <h4 className="text-lg font-bold">🏆 Leaderboard</h4>
-                                                        <button onClick={exportResults} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md">
-                                                            <Download className="h-4 w-4" /> Export CSV
-                                                        </button>
-                                                    </div>
-                                                    {ranked.length === 0 ? (
-                                                        <p className="text-center text-gray-500 py-8">No qualified participants yet</p>
-                                                    ) : (
-                                                        ranked.map((rp, index) => (
-                                                            <div key={rp.id} className={`flex items-center gap-4 p-4 rounded-xl transition ${index === 0 ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 shadow-md' :
-                                                                index === 1 ? 'bg-gradient-to-r from-gray-50 to-slate-100 border-2 border-gray-400' :
-                                                                    index === 2 ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300' :
-                                                                        'bg-gray-50 border border-gray-200'
-                                                                }`}>
-                                                                <div className="text-3xl font-bold w-14 text-center">
-                                                                    {index + 1}
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <div className="font-bold text-lg text-gray-900">{rp.registration?.user?.full_name || 'Unknown'}</div>
-                                                                    <div className="text-sm text-gray-600">{rp.registration?.user?.roll_number || '-'}</div>
-                                                                </div>
-                                                                <div className="text-2xl font-bold text-indigo-600">
-                                                                    {rp.score || 0} pts
-                                                                </div>
-                                                                {index < 3 && (
-                                                                    <div className="text-4xl">
-                                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            )
-                                        })()
-                                    ) : (
-                                        // MANAGE SCORES VIEW (existing table)
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500"><tr><th className="px-6 py-4">Participant</th><th className="px-6 py-4">Score</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {roundParticipants.map(rp => (
-                                                    <tr key={rp.id} className="hover:bg-gray-50/50">
-                                                        <td className="px-6 py-4 font-medium text-gray-900">{rp.registration?.user?.full_name}</td>
-                                                        <td className="px-6 py-4"><input type="number" className="w-20 px-2 py-1 border rounded" defaultValue={rp.score || 0} onBlur={(e) => updateScore(rp.id, e.target.value)} /></td>
-                                                        <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${rp.status === 'qualified' ? 'bg-green-100 text-green-700' : rp.status === 'eliminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{rp.status}</span></td>
-                                                        <td className="px-6 py-4 flex gap-2">
-                                                            <button onClick={() => promoteParticipant(rp.id, 'qualified')} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Qualify"><Check className="h-4 w-4" /></button>
-                                                            <button onClick={() => promoteParticipant(rp.id, 'eliminated')} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Eliminate"><XIcon className="h-4 w-4" /></button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     )}
                     {/* PAYMENTS */}

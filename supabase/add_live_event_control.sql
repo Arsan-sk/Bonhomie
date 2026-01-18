@@ -1,6 +1,6 @@
 -- ============================================
 -- Live Event Control System - Database Migration
--- ============================================
+-- ===============================whilke runningbthis goit the er=============
 
 -- Phase 1: Add Live Event Tracking to Events Table
 ALTER TABLE public.events 
@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_event_results_registration ON public.event_result
 -- Phase 6: Create Function to Increment Win Counts
 CREATE OR REPLACE FUNCTION increment_win_count(
     profile_ids UUID[],
-    position INTEGER
+    place_position INTEGER
 )
 RETURNS VOID AS $$
 BEGIN
@@ -82,12 +82,12 @@ BEGIN
     UPDATE public.profiles
     SET 
         win_count = win_count + 1,
-        first_place_count = CASE WHEN position = 1 THEN first_place_count + 1 ELSE first_place_count END,
-        second_place_count = CASE WHEN position = 2 THEN second_place_count + 1 ELSE second_place_count END,
-        third_place_count = CASE WHEN position = 3 THEN third_place_count + 1 ELSE third_place_count END
+        first_place_count = CASE WHEN place_position = 1 THEN first_place_count + 1 ELSE first_place_count END,
+        second_place_count = CASE WHEN place_position = 2 THEN second_place_count + 1 ELSE second_place_count END,
+        third_place_count = CASE WHEN place_position = 3 THEN third_place_count + 1 ELSE third_place_count END
     WHERE id = ANY(profile_ids);
     
-    RAISE NOTICE 'Updated win counts for % profiles at position %', array_length(profile_ids, 1), position;
+    RAISE NOTICE 'Updated win counts for % profiles at place %', array_length(profile_ids, 1), place_position;
 END;
 $$ LANGUAGE plpgsql;
 
