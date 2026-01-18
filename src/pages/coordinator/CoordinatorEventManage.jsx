@@ -5,6 +5,7 @@ import { ArrowLeft, Edit2, Users, DollarSign, BarChart3, Clock, Calendar, MapPin
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
@@ -27,6 +28,7 @@ export default function CoordinatorEventManage() {
     // Control Tab State
     const [isGoingLive, setIsGoingLive] = useState(false)
     const [showDateWarning, setShowDateWarning] = useState(false)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null })
 
     // Payments State
     const [payments, setPayments] = useState([])
@@ -326,7 +328,7 @@ export default function CoordinatorEventManage() {
                 .from('events')
                 .update({
                     is_live: true,
-                    event_status: 'ongoing',
+                    event_status: 'live',
                     live_started_at: new Date().toISOString()
                 })
                 .eq('id', id)
@@ -345,7 +347,7 @@ export default function CoordinatorEventManage() {
     }
 
     const handleEndLive = async () => {
-        if (!confirm('End the live event? This will stop displaying it in the "Happening Now" section.')) return
+        if (!confirm('Stop live broadcasting? You can go live again anytime.')) return
 
         setIsGoingLive(true)
         try {
@@ -353,7 +355,7 @@ export default function CoordinatorEventManage() {
                 .from('events')
                 .update({
                     is_live: false,
-                    event_status: 'completed',
+                    event_status: 'upcoming',
                     live_ended_at: new Date().toISOString()
                 })
                 .eq('id', id)
@@ -361,10 +363,10 @@ export default function CoordinatorEventManage() {
             if (error) throw error
 
             await fetchEventDetails()
-            alert('Event has ended successfully!')
+            alert('Event is now offline. You can go live again anytime!')
         } catch (error) {
-            console.error('Error ending live:', error)
-            alert('Failed to end event: ' + error.message)
+            console.error('Error stopping live:', error)
+            alert('Failed to stop live: ' + error.message)
         } finally {
             setIsGoingLive(false)
         }
@@ -373,19 +375,128 @@ export default function CoordinatorEventManage() {
     // Results Functions
     const handleAnnounceResults = async () => {
         if (!resultForm.first_place) {
-            alert('At least first place winner must be selected')
+            setConfirmDialog({
+                isOpen: true,
+                type: 'warning',
+                title: 'Missing Winner',
+                message: 'At least first place winner must be selected before announcing results.',
+                confirmText: 'OK',
+                showCancel: false,
+                onConfirm: () => {}
+            })
             return
         }
 
-        if (!confirm('Announce these results? This will update win counts for all winners.')) return
+        setConfirmDialog({
+            isOpen: true,
+            type: 'confirm',
+            title: 'Announce Results?',
+            message: 'This will update win counts for all winners and mark the event as completed. This action cannot be undone.',
+            confirmText: 'Announce Results',
+            cancelText: 'Cancel',
+            showCancel: true,
+            onConfirm: async () => {
+                setAnnouncingResults(true)
+                try {
+                    // Get current user ID
+                    const { data: { user } } = await supabase.auth.getUser()
+                    const currentUserId = user?.id
 
-        setAnnouncingResults(true)
-        try {
-            // Get current user ID
-            const { data: { user } } = await supabase.auth.getUser()
-            const currentUserId = user?.id
+                    // Process each position
+                    const positions = [
+                        { key: 'first_place', position: 1 },
+                        { key: 'second_place', position: 2 },
+                        { key: 'third_place', position: 3 }
+                    ]
 
-            // Process each position
+                    for (const { key, position } of positions) {
+                        const regId = resultForm[key]
+                        if (!regId) continue
+
+                        // Get registration with team members
+                        const { data: registration, error: regError } = await supabase
+                            .from('registrations')
+                            .select('*, user:profiles(id)')
+                            .eq('id', regId)
+                            .single()
+
+                        if (regError || !registration) {
+                            console.error('Error fetching registration:', regError)
+                            continue
+                        }
+
+                        // Collect all profile IDs (leader + team members)
+                        const profileIds = [registration.user.id]
+                        if (registration.team_members && registration.team_members.length > 0) {
+                            profileIds.push(...registration.team_members.map(m => m.id))
+                        }
+
+                        // Increment win counts
+                        const { error: rpcError } = await supabase.rpc('increment_win_count', {
+                            profile_ids: profileIds,
+                            place_position: position
+                        })
+
+                        if (rpcError) {
+                            console.error('Error incrementing win counts:', rpcError)
+                            throw rpcError
+                        }
+
+                        // Store result in event_results table
+                        const { error: insertError } = await supabase.from('event_results').insert({
+                            event_id: id,
+                            registration_id: regId,
+                            position: position,
+                            team_members: registration.team_members || [],
+                            announced_by: currentUserId
+                        })
+
+                        if (insertError) {
+                            console.error('Error storing result:', insertError)
+                        }
+                    }
+
+                    // Update event with winners and mark results as announced
+                    const { error: updateError } = await supabase.from('events').update({
+                        winner_profile_id: resultForm.first_place || null,
+                        runnerup_profile_id: resultForm.second_place || null,
+                        second_runnerup_profile_id: resultForm.third_place || null,
+                        results_announced: true,
+                        results_announced_at: new Date().toISOString(),
+                        event_status: 'completed'
+                    }).eq('id', id)
+
+                    if (updateError) throw updateError
+
+                    setConfirmDialog({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Results Announced!',
+                        message: '✅ Results have been announced successfully! Win counts have been updated for all winners.',
+                        confirmText: 'OK',
+                        showCancel: false,
+                        onConfirm: () => {}
+                    })
+                    
+                    await fetchEventDetails()
+                    if (activeTab === 'participants') await fetchParticipants()
+                } catch (error) {
+                    console.error('Error announcing results:', error)
+                    setConfirmDialog({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Failed to Announce Results',
+                        message: 'An error occurred: ' + error.message,
+                        confirmText: 'OK',
+                        showCancel: false,
+                        onConfirm: () => {}
+                    })
+                } finally {
+                    setAnnouncingResults(false)
+                }
+            }
+        })
+    }
             const positions = [
                 { key: 'first_place', position: 1 },
                 { key: 'second_place', position: 2 },
@@ -1098,7 +1209,7 @@ export default function CoordinatorEventManage() {
                                                 className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gray-600 text-white rounded-xl font-bold text-lg hover:bg-gray-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <XIcon className="h-6 w-6" />
-                                                {isGoingLive ? 'Ending...' : 'End Event'}
+                                                {isGoingLive ? 'Stopping...' : 'Stop Live'}
                                             </button>
                                         )}
                                     </div>
@@ -1440,6 +1551,19 @@ export default function CoordinatorEventManage() {
                     </div>
                 </div>
             )}
+
+            {/* Unified Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                onConfirm={confirmDialog.onConfirm}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                type={confirmDialog.type}
+                confirmText={confirmDialog.confirmText}
+                cancelText={confirmDialog.cancelText}
+                showCancel={confirmDialog.showCancel}
+            />
         </div>
     )
 }

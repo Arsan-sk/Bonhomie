@@ -29,14 +29,32 @@ export default function CoordinatorManager() {
         setSearching(true)
         setSearchResult(null)
         try {
-            const { data, error } = await supabase.from('profiles').select('id, full_name, college_email').eq('college_email', searchQuery).single()
-            if (error || !data) {
-                const { data: nameData } = await supabase.from('profiles').select('id, full_name, college_email').ilike('full_name', searchQuery).limit(1).single()
-                if (nameData) setSearchResult(nameData)
+            // First try exact email match
+            const { data: emailData, error: emailError } = await supabase
+                .from('profiles')
+                .select('id, full_name, college_email, role')
+                .eq('college_email', searchQuery)
+                .single()
+            
+            if (emailData) {
+                setSearchResult(emailData)
             } else {
-                setSearchResult(data)
+                // Then try name search
+                const { data: nameData, error: nameError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, college_email, role')
+                    .ilike('full_name', `%${searchQuery}%`)
+                    .limit(5)
+                
+                if (nameData && nameData.length > 0) {
+                    setSearchResult(nameData[0]) // Use first match
+                }
             }
-        } catch (error) { console.error(error) } finally { setSearching(false) }
+        } catch (error) {
+            console.error('Search error:', error)
+        } finally {
+            setSearching(false)
+        }
     }
 
     const assignCoordinator = async (user) => {
