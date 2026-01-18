@@ -1273,12 +1273,42 @@ export default function CoordinatorEventManage() {
                                     // Dynamic columns based on filter
                                     const paymentColumns = paymentModeFilter === 'cash' ? [
                                         {
-                                            key: 'user', title: 'Student', render: (row) => (
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
-                                                    <div className="text-xs text-gray-500">{row.user?.roll_number} • {row.user?.department}</div>
-                                                </div>
-                                            )
+                                            key: 'user', title: 'Student', render: (row) => {
+                                                const teamSize = row.team_members?.length || 0
+                                                return (
+                                                    <div className="relative group">
+                                                        <div>
+                                                            <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {row.user?.roll_number} • {row.user?.department}
+                                                                {teamSize > 0 && (
+                                                                    <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                                                                        👥 Team Lead (+{teamSize})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Team Members Hover Tooltip */}
+                                                        {teamSize > 0 && (
+                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                                <div className="space-y-2">
+                                                                    {row.team_members.map((member, idx) => (
+                                                                        <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
+                                                                            <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+                                                                            <div>
+                                                                                <div className="font-medium text-gray-900">{member.name}</div>
+                                                                                <div className="text-gray-500">{member.roll_number}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            }
                                         },
                                         { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
                                         {
@@ -1293,12 +1323,42 @@ export default function CoordinatorEventManage() {
                                         }
                                     ] : paymentModeFilter === 'online' ? [
                                         {
-                                            key: 'user', title: 'Student', render: (row) => (
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
-                                                    <div className="text-xs text-gray-500">{row.user?.roll_number}</div>
-                                                </div>
-                                            )
+                                            key: 'user', title: 'Student', render: (row) => {
+                                                const teamSize = row.team_members?.length || 0
+                                                return (
+                                                    <div className="relative group">
+                                                        <div>
+                                                            <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {row.user?.roll_number}
+                                                                {teamSize > 0 && (
+                                                                    <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                                                                        👥 Team Lead (+{teamSize})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Team Members Hover Tooltip */}
+                                                        {teamSize > 0 && (
+                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                                <div className="space-y-2">
+                                                                    {row.team_members.map((member, idx) => (
+                                                                        <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
+                                                                            <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+                                                                            <div>
+                                                                                <div className="font-medium text-gray-900">{member.name}</div>
+                                                                                <div className="text-gray-500">{member.roll_number}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            }
                                         },
                                         { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
                                         { key: 'txn', title: 'Transaction ID', render: (row) => row.transaction_id ? <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{row.transaction_id}</span> : <span className="text-gray-400 text-xs">Not provided</span> },
