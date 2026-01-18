@@ -149,7 +149,7 @@ export default function CoordinatorDashboard() {
                         <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                             <Activity className="h-6 w-6" />
                         </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">My Events</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned Events</span>
                     </div>
                     <h3 className="text-3xl font-bold text-gray-900">{stats.activeEvents}</h3>
                 </div>
