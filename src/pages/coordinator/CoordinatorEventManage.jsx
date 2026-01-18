@@ -1235,7 +1235,7 @@ export default function CoordinatorEventManage() {
                     {activeTab === 'payments' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants. Hover over team leads to see members.</p></div>
+                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants. Hover over team leaders to expand and see all members.</p></div>
 
                                 {/* Payment Mode Toggle */}
                                 <div className="flex gap-2 border border-gray-200 rounded-lg p-1 bg-gray-50">
@@ -1291,16 +1291,25 @@ export default function CoordinatorEventManage() {
 
                                                         {/* Team Members Hover Tooltip */}
                                                         {teamSize > 0 && (
-                                                            <div className="absolute left-0 top-full mt-2 w-80 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-96 overflow-y-auto">
-                                                                <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide">Team Members ({teamSize})</div>
-                                                                <div className="space-y-2">
+                                                            <div className="absolute left-0 top-full mt-2 w-80 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-96 overflow-y-auto custom-scrollbar">
+                                                                <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+                                                                    <Users className="h-4 w-4" />
+                                                                    Team Members ({teamSize})
+                                                                </div>
+                                                                <div className="space-y-3">
                                                                     {row.team_members.map((member, idx) => (
-                                                                        <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
-                                                                            <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="font-medium text-gray-900">{member.name}</div>
-                                                                                <div className="text-gray-500">{member.roll_number}</div>
-                                                                                {member.email && <div className="text-gray-400 truncate text-[10px]">{member.email}</div>}
+                                                                        <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                                                                            <div className="flex items-start gap-2">
+                                                                                <User className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="font-semibold text-gray-900 text-sm">{member.name}</div>
+                                                                                    <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                                                                                        <div><span className="font-mono bg-white px-1.5 py-0.5 rounded">{member.roll_number}</span></div>
+                                                                                        {member.department && <div>📚 {member.department}</div>}
+                                                                                        {member.year && <div>🎓 Year {member.year}</div>}
+                                                                                        {member.email && <div className="text-gray-500 truncate text-[10px]">{member.email}</div>}
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -1469,7 +1478,152 @@ export default function CoordinatorEventManage() {
                                         }
                                     ]
 
-                                    return <SmartTable columns={paymentColumns} data={filteredPayments} loading={loadingPayments} emptyMessage={`No ${paymentModeFilter === 'all' ? '' : paymentModeFilter} payments pending.`} />
+                                    // Custom payment list with smooth expanding hover (like participants tab)
+                                    return (
+                                        <div className="space-y-3 min-h-[400px]">
+                                            {filteredPayments.length === 0 ? (
+                                                <div className="text-center py-12 text-gray-500">
+                                                    No {paymentModeFilter === 'all' ? '' : paymentModeFilter} payments pending.
+                                                </div>
+                                            ) : (
+                                                filteredPayments.map((payment) => {
+                                                    const teamSize = payment.team_members?.length || 0
+                                                    const isLeader = teamSize > 0
+                                                    const isExpanded = expandedTeams.has(payment.id)
+
+                                                    // Payment validation
+                                                    const isCash = payment.payment_mode === 'cash'
+                                                    const isOnline = payment.payment_mode === 'online' || payment.payment_mode === 'hybrid'
+                                                    const canVerify = isCash || (isOnline && payment.transaction_id && payment.payment_screenshot_path)
+
+                                                    return (
+                                                        <div
+                                                            key={payment.id}
+                                                            className="group border border-gray-200 rounded-lg overflow-hidden hover:border-purple-300 transition-all duration-200"
+                                                            onMouseEnter={() => isLeader && toggleTeamExpansion(payment.id)}
+                                                            onMouseLeave={() => isLeader && toggleTeamExpansion(payment.id)}
+                                                        >
+                                                            {/* Main Payment Row */}
+                                                            <div className={`p-4 ${isLeader ? 'bg-purple-50' : 'bg-white'}`}>
+                                                                <div className="flex items-center gap-4">
+                                                                    {/* Avatar */}
+                                                                    <div className="h-12 w-12 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold flex-shrink-0">
+                                                                        {payment.user?.full_name?.[0]?.toUpperCase() || '?'}
+                                                                    </div>
+
+                                                                    {/* Student Info */}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <span className="font-bold text-gray-900">{payment.user?.full_name || 'Unknown'}</span>
+                                                                            {isLeader && (
+                                                                                <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-semibold rounded-full flex items-center gap-1">
+                                                                                    <Users className="h-3 w-3" />
+                                                                                    Team Lead (+{teamSize})
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-sm text-gray-600">{payment.user?.college_email}</div>
+                                                                        <div className="text-xs text-gray-500 mt-0.5">{payment.user?.roll_number} • {payment.user?.department}</div>
+                                                                    </div>
+
+                                                                    {/* Payment Mode */}
+                                                                    <div className="flex-shrink-0">
+                                                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isCash ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'
+                                                                            }`}>
+                                                                            {isCash ? '💵 Cash' : '💳 Online'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Amount */}
+                                                                    <div className="text-right flex-shrink-0">
+                                                                        <div className="text-xs text-gray-500">Amount</div>
+                                                                        <div className="font-bold text-green-600">₹{event.fee || 0}</div>
+                                                                    </div>
+
+                                                                    {/* Transaction ID (if online) */}
+                                                                    {isOnline && (
+                                                                        <div className="hidden md:block flex-shrink-0 max-w-[150px]">
+                                                                            <div className="text-xs text-gray-500 mb-1">Transaction ID</div>
+                                                                            {payment.transaction_id ? (
+                                                                                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded block truncate">
+                                                                                    {payment.transaction_id}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-xs text-gray-400">Not provided</span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Proof (if online) */}
+                                                                    {isOnline && (
+                                                                        <div className="hidden md:block flex-shrink-0">
+                                                                            {payment.payment_screenshot_url || payment.payment_screenshot_path ? (
+                                                                                <button
+                                                                                    onClick={() => setScreenshotModal({ isOpen: true, url: payment.payment_screenshot_url || payment.payment_screenshot_path })}
+                                                                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 text-sm font-medium"
+                                                                                >
+                                                                                    <Eye className="h-4 w-4" /> View Proof
+                                                                                </button>
+                                                                            ) : (
+                                                                                <span className="text-xs text-gray-400">No proof</span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Actions */}
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        <button
+                                                                            onClick={() => verifyPayment(payment.id)}
+                                                                            disabled={!canVerify}
+                                                                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            title={!canVerify ? 'Online payment requires transaction ID and screenshot' : 'Verify payment'}
+                                                                        >
+                                                                            ✓ Verify
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleRejectPayment(payment.id)}
+                                                                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
+                                                                        >
+                                                                            ✗ Reject
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Expanded Team Members */}
+                                                            {isLeader && isExpanded && payment.team_members && payment.team_members.length > 0 && (
+                                                                <div className="bg-purple-100 border-t border-purple-200 p-4 animate-in slide-in-from-top duration-200">
+                                                                    <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+                                                                        <Users className="h-4 w-4" />
+                                                                        Team Members ({teamSize})
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                        {payment.team_members.map((member, idx) => (
+                                                                            <div key={idx} className="bg-white rounded-lg p-3 border border-purple-200">
+                                                                                <div className="flex items-start gap-3">
+                                                                                    <div className="h-10 w-10 rounded-full bg-purple-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                                                        {member.name?.[0]?.toUpperCase() || '?'}
+                                                                                    </div>
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="font-semibold text-gray-900 text-sm">{member.name}</div>
+                                                                                        <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                                                                                            <div><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{member.roll_number}</span></div>
+                                                                                            {member.department && <div>📚 {member.department}</div>}
+                                                                                            {member.year && <div>🎓 Year {member.year}</div>}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+                                    )
                                 })()}
                             </div>
                         </div>
