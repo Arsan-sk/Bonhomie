@@ -142,7 +142,7 @@ export default function SmartTable({
                                         </td>
                                     )}
                                     {columns.map((col, colIdx) => (
-                                        <td key={colIdx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <td key={colIdx} className="px-6 py-4 text-sm text-gray-900">
                                             {col.render ? col.render(row) : row[col.key]}
                                         </td>
                                     ))}

@@ -1291,15 +1291,16 @@ export default function CoordinatorEventManage() {
 
                                                         {/* Team Members Hover Tooltip */}
                                                         {teamSize > 0 && (
-                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                            <div className="absolute left-0 top-full mt-2 w-80 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-96 overflow-y-auto">
+                                                                <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide">Team Members ({teamSize})</div>
                                                                 <div className="space-y-2">
                                                                     {row.team_members.map((member, idx) => (
                                                                         <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
                                                                             <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                                                                            <div>
+                                                                            <div className="flex-1 min-w-0">
                                                                                 <div className="font-medium text-gray-900">{member.name}</div>
                                                                                 <div className="text-gray-500">{member.roll_number}</div>
+                                                                                {member.email && <div className="text-gray-400 truncate text-[10px]">{member.email}</div>}
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -1341,15 +1342,16 @@ export default function CoordinatorEventManage() {
 
                                                         {/* Team Members Hover Tooltip */}
                                                         {teamSize > 0 && (
-                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                            <div className="absolute left-0 top-full mt-2 w-80 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-96 overflow-y-auto">
+                                                                <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide">Team Members ({teamSize})</div>
                                                                 <div className="space-y-2">
                                                                     {row.team_members.map((member, idx) => (
                                                                         <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
                                                                             <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                                                                            <div>
+                                                                            <div className="flex-1 min-w-0">
                                                                                 <div className="font-medium text-gray-900">{member.name}</div>
                                                                                 <div className="text-gray-500">{member.roll_number}</div>
+                                                                                {member.email && <div className="text-gray-400 truncate text-[10px]">{member.email}</div>}
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -1404,15 +1406,16 @@ export default function CoordinatorEventManage() {
 
                                                         {/* Team Members Hover Tooltip */}
                                                         {teamSize > 0 && (
-                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                            <div className="absolute left-0 top-full mt-2 w-80 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-96 overflow-y-auto">
+                                                                <div className="text-xs font-bold text-purple-700 mb-3 uppercase tracking-wide">Team Members ({teamSize})</div>
                                                                 <div className="space-y-2">
                                                                     {row.team_members.map((member, idx) => (
                                                                         <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
                                                                             <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
-                                                                            <div>
+                                                                            <div className="flex-1 min-w-0">
                                                                                 <div className="font-medium text-gray-900">{member.name}</div>
                                                                                 <div className="text-gray-500">{member.roll_number}</div>
+                                                                                {member.email && <div className="text-gray-400 truncate text-[10px]">{member.email}</div>}
                                                                             </div>
                                                                         </div>
                                                                     ))}
