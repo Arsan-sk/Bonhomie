@@ -99,8 +99,44 @@ export default function CoordinatorEventManage() {
         } else {
             console.log('✅ Fetched pending payments:', data?.length)
 
+            // Filter to show ONLY team leaders or individual participants
+            // Team members (those with empty team_members array but part of someone's team) should be hidden
+
+            // Step 1: Collect all member profile IDs from team_members arrays
+            const allMemberIds = new Set()
+            data?.forEach(reg => {
+                if (reg.team_members && Array.isArray(reg.team_members) && reg.team_members.length > 0) {
+                    reg.team_members.forEach(member => {
+                        // team_members contains objects with id, name, roll_number
+                        if (member.id) {
+                            allMemberIds.add(member.id)
+                        }
+                    })
+                }
+            })
+
+            console.log('🔍 Found member IDs in teams:', Array.from(allMemberIds))
+
+            // Step 2: Filter out members - keep only:
+            // - Leaders (have non-empty team_members array)
+            // - Individuals (not found in any team_members array)
+            const leadersAndIndividuals = (data || []).filter(reg => {
+                const userProfileId = reg.user?.id
+                const isPartOfSomeoneTeam = allMemberIds.has(userProfileId)
+                const isLeader = reg.team_members && reg.team_members.length > 0
+
+                // Keep if: is a leader OR not part of anyone's team (individual)
+                const shouldKeep = isLeader || !isPartOfSomeoneTeam
+
+                console.log(`User: ${reg.user?.full_name}, ProfileID: ${userProfileId}, IsLeader: ${isLeader}, InTeam: ${isPartOfSomeoneTeam}, Keep: ${shouldKeep}`)
+
+                return shouldKeep
+            })
+
+            console.log('👥 Filtered results:', leadersAndIndividuals.length, 'from', data?.length)
+
             // Generate public URLs for payment screenshots
-            const paymentsWithUrls = (data || []).map(payment => {
+            const paymentsWithUrls = leadersAndIndividuals.map(payment => {
                 if (payment.payment_screenshot_path) {
                     // Get public URL from storage
                     const { data: urlData } = supabase.storage
@@ -195,7 +231,7 @@ export default function CoordinatorEventManage() {
                 let teamNumber = 0
                 // Filter to only team leaders (those with non-empty team_members array)
                 const teamLeaders = registrations.filter(reg => reg.team_members && reg.team_members.length > 0)
-                
+
                 teamLeaders.forEach((reg) => {
                     teamNumber++
                     const teamMembers = reg.team_members || []
@@ -383,7 +419,7 @@ export default function CoordinatorEventManage() {
                 message: 'At least first place winner must be selected before announcing results.',
                 confirmText: 'OK',
                 showCancel: false,
-                onConfirm: () => {}
+                onConfirm: () => { }
             })
             return
         }
@@ -476,9 +512,9 @@ export default function CoordinatorEventManage() {
                         message: '✅ Results have been announced successfully! Win counts have been updated for all winners.',
                         confirmText: 'OK',
                         showCancel: false,
-                        onConfirm: () => {}
+                        onConfirm: () => { }
                     })
-                    
+
                     await fetchEventDetails()
                     if (activeTab === 'participants') await fetchParticipants()
                 } catch (error) {
@@ -490,7 +526,7 @@ export default function CoordinatorEventManage() {
                         message: 'An error occurred: ' + error.message,
                         confirmText: 'OK',
                         showCancel: false,
-                        onConfirm: () => {}
+                        onConfirm: () => { }
                     })
                 } finally {
                     setAnnouncingResults(false)
@@ -622,10 +658,10 @@ export default function CoordinatorEventManage() {
 
             {/* Banner - Responsive */}
             <div className="h-32 md:h-48 rounded-xl md:rounded-2xl overflow-hidden relative group">
-                <img 
-                    src={event.image_path || getUnsplashImageUrl(event.name, 1200, 300)} 
-                    alt={event.name} 
-                    className="w-full h-full object-cover" 
+                <img
+                    src={event.image_path || getUnsplashImageUrl(event.name, 1200, 300)}
+                    alt={event.name}
+                    className="w-full h-full object-cover"
                     onError={(e) => { e.target.src = getCategoryImage(event.category) }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -863,7 +899,7 @@ export default function CoordinatorEventManage() {
                                 {/* Winner Selection Form */}
                                 <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
                                     <h4 className="text-lg font-bold text-gray-900 mb-4">🏆 Select Winners</h4>
-                                    
+
                                     {participants.length === 0 ? (
                                         <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                                             <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -965,7 +1001,7 @@ export default function CoordinatorEventManage() {
                                         <div className="text-sm text-green-700 mb-4">
                                             Announced on: {event.results_announced_at ? new Date(event.results_announced_at).toLocaleString() : 'N/A'}
                                         </div>
-                                        
+
                                         <div className="space-y-3">
                                             {/* Display winners */}
                                             {[
@@ -976,7 +1012,7 @@ export default function CoordinatorEventManage() {
                                                 if (!winnerId) return null
                                                 const winner = participants.find(p => p.id === winnerId)
                                                 if (!winner) return null
-                                                
+
                                                 return (
                                                     <div key={key} className="bg-white rounded-xl p-4 shadow-sm border border-green-200">
                                                         <div className="font-semibold text-gray-700 mb-2">{label}</div>
@@ -1067,11 +1103,10 @@ export default function CoordinatorEventManage() {
                                         </div>
                                         <div className="text-right">
                                             <div className="text-sm text-gray-500 mb-1">Status</div>
-                                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${
-                                                event?.event_status === 'ongoing' ? 'bg-green-100 text-green-700' :
+                                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${event?.event_status === 'ongoing' ? 'bg-green-100 text-green-700' :
                                                 event?.event_status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                                'bg-gray-100 text-gray-700'
-                                            }`}>
+                                                    'bg-gray-100 text-gray-700'
+                                                }`}>
                                                 {event?.event_status || 'upcoming'}
                                             </span>
                                         </div>
@@ -1093,11 +1128,10 @@ export default function CoordinatorEventManage() {
 
                                     {/* Date Match Indicator */}
                                     {event?.event_date && (
-                                        <div className={`p-4 rounded-xl border-2 ${
-                                            checkEventDateMatch() 
-                                                ? 'bg-green-50 border-green-200' 
-                                                : 'bg-yellow-50 border-yellow-200'
-                                        }`}>
+                                        <div className={`p-4 rounded-xl border-2 ${checkEventDateMatch()
+                                            ? 'bg-green-50 border-green-200'
+                                            : 'bg-yellow-50 border-yellow-200'
+                                            }`}>
                                             <div className="flex items-center gap-3">
                                                 {checkEventDateMatch() ? (
                                                     <>
@@ -1292,12 +1326,42 @@ export default function CoordinatorEventManage() {
                                     ] : [
                                         // 'all' mode - shows all payments with smart verify logic
                                         {
-                                            key: 'user', title: 'Student', render: (row) => (
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
-                                                    <div className="text-xs text-gray-500">{row.user?.roll_number} • {row.user?.department}</div>
-                                                </div>
-                                            )
+                                            key: 'user', title: 'Student', render: (row) => {
+                                                const teamSize = row.team_members?.length || 0
+                                                return (
+                                                    <div className="relative group">
+                                                        <div>
+                                                            <div className="font-medium text-gray-900">{row.user?.full_name || 'Unknown'}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {row.user?.roll_number} • {row.user?.department}
+                                                                {teamSize > 0 && (
+                                                                    <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                                                                        👥 Team Lead (+{teamSize})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Team Members Hover Tooltip */}
+                                                        {teamSize > 0 && (
+                                                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border-2 border-purple-200 rounded-lg shadow-xl p-4 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                                                <div className="text-xs font-bold text-purple-700 mb-2 uppercase tracking-wide">Team Members ({teamSize})</div>
+                                                                <div className="space-y-2">
+                                                                    {row.team_members.map((member, idx) => (
+                                                                        <div key={idx} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-2 last:border-0">
+                                                                            <User className="h-3 w-3 text-purple-500 flex-shrink-0 mt-0.5" />
+                                                                            <div>
+                                                                                <div className="font-medium text-gray-900">{member.name}</div>
+                                                                                <div className="text-gray-500">{member.roll_number}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            }
                                         },
                                         { key: 'mode', title: 'Mode', render: (row) => <span className={`px-2 py-1 rounded text-xs font-semibold ${row.payment_mode === 'cash' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>{row.payment_mode === 'cash' ? '💵 Cash' : '💳 Online'}</span> },
                                         { key: 'amount', title: 'Amount', render: (row) => <span className="font-semibold text-green-600">₹{event.fee || 0}</span> },
@@ -1313,21 +1377,30 @@ export default function CoordinatorEventManage() {
                                             ) : <span className="text-gray-400 text-xs">None</span>
                                         },
                                         {
-                                            key: 'verify', title: 'Action', render: (row) => {
+                                            key: 'actions', title: 'Actions', render: (row) => {
                                                 // Smart logic: Cash payments don't need transaction_id or screenshot
                                                 const isCash = row.payment_mode === 'cash';
                                                 const isOnline = row.payment_mode === 'online' || row.payment_mode === 'hybrid';
                                                 const canVerify = isCash || (isOnline && row.transaction_id && row.payment_screenshot_path);
 
                                                 return (
-                                                    <button
-                                                        onClick={() => verifyPayment(row.id)}
-                                                        disabled={!canVerify}
-                                                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        title={!canVerify ? 'Online payment requires transaction ID and screenshot' : 'Verify payment'}
-                                                    >
-                                                        ✓ Verify
-                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => verifyPayment(row.id)}
+                                                            disabled={!canVerify}
+                                                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title={!canVerify ? 'Online payment requires transaction ID and screenshot' : 'Verify payment'}
+                                                        >
+                                                            ✓ Verify
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleRejectPayment(row.id)}
+                                                            className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
+                                                            title="Reject payment"
+                                                        >
+                                                            ✗ Reject
+                                                        </button>
+                                                    </div>
                                                 );
                                             }
                                         }
