@@ -77,38 +77,46 @@ export default function AdminCoordinators() {
         if (!confirm(`Promote ${user.full_name} to Coordinator?`)) return
 
         try {
-            const { error } = await supabase
+            console.log('Promoting user:', { userId: user.id, currentRole: user.role, newRole: 'coordinator' })
+            
+            const { data, error } = await supabase
                 .from('profiles')
                 .update({ role: 'coordinator' })
                 .eq('id', user.id)
+                .select()
 
-            if (error) throw error
+            if (error) {
+                console.error('Supabase error:', error)
+                throw error
+            }
 
+            console.log('Update successful, returned data:', data)
             alert(`Success! ${user.full_name} is now a Coordinator.`)
             setSearchResult(null)
             setSearchQuery('')
             fetchCoordinators()
         } catch (error) {
             console.error('Error promoting user:', error)
-            alert('Failed to promote user.')
+            alert(`Failed to promote user: ${error.message}`)
         }
     }
 
     const demoteUser = async (user) => {
-        if (!confirm(`Revoke Coordinator role from ${user.full_name}? They will become a regular User.`)) return
+        if (!confirm(`Revoke Coordinator role from ${user.full_name}? They will become a regular Student.`)) return
 
         try {
             const { error } = await supabase
                 .from('profiles')
-                .update({ role: 'user' }) // Default back to 'user'
+                .update({ role: 'student' })
                 .eq('id', user.id)
 
             if (error) throw error
 
+            alert(`Success! ${user.full_name} is now a Student.`)
             fetchCoordinators()
         } catch (error) {
             console.error('Error demoting user:', error)
-            alert('Failed to demote user.')
+            alert(`Failed to demote user: ${error.message}`)
         }
     }
 
