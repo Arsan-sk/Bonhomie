@@ -86,7 +86,7 @@ export default function CoordinatorEventManage() {
         // Fetch ONLY pending registrations
         const { data, error } = await supabase
             .from('registrations')
-            .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, user:profiles(id, full_name, college_email, roll_number)`)
+            .select(`id, transaction_id, payment_screenshot_path, status, registered_at, payment_mode, team_members, user:profiles(id, full_name, college_email, roll_number, department)`)
             .eq('event_id', id)
             .eq('status', 'pending') // ONLY pending payments
             .order('registered_at', { ascending: false })
@@ -1235,7 +1235,7 @@ export default function CoordinatorEventManage() {
                     {activeTab === 'payments' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants.</p></div>
+                                <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants. Hover over team leads to see members.</p></div>
 
                                 {/* Payment Mode Toggle */}
                                 <div className="flex gap-2 border border-gray-200 rounded-lg p-1 bg-gray-50">
