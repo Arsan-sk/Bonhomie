@@ -6,7 +6,7 @@ import * as z from 'zod'
 import { useDropzone } from 'react-dropzone'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { CheckCircle, X, Upload, Loader2, ArrowLeft } from 'lucide-react'
+import { CheckCircle, X, Upload, Loader2, ArrowLeft, AlertCircle } from 'lucide-react'
 import UserSearchAutocomplete from '../components/registration/UserSearchAutocomplete'
 
 const registrationSchema = z.object({
@@ -30,6 +30,8 @@ export default function EventRegistration() {
     const [error, setError] = useState('')
     const [paymentMode, setPaymentMode] = useState('hybrid')
     const [selectedMembers, setSelectedMembers] = useState([])
+    const [userProfile, setUserProfile] = useState(null)
+    const [genderEligibilityError, setGenderEligibilityError] = useState('')
 
     const {
         register,
@@ -41,7 +43,31 @@ export default function EventRegistration() {
 
     useEffect(() => {
         fetchEvent()
+        fetchUserProfile()
     }, [id])
+
+    useEffect(() => {
+        if (event && userProfile) {
+            checkGenderEligibility(event)
+        }
+    }, [event, userProfile])
+
+    const fetchUserProfile = async () => {
+        if (!user) return
+
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('gender')
+                .eq('id', user.id)
+                .single()
+
+            if (error) throw error
+            setUserProfile(data)
+        } catch (error) {
+            console.error('Error fetching user profile:', error)
+        }
+    }
 
     const fetchEvent = async () => {
         try {
@@ -68,6 +94,37 @@ export default function EventRegistration() {
         } finally {
             setLoading(false)
         }
+    }
+
+    const checkGenderEligibility = (eventData) => {
+        if (!userProfile || !eventData.allowed_genders || eventData.allowed_genders.length === 0) {
+            setGenderEligibilityError('')
+            return true
+        }
+
+        const userGender = userProfile.gender
+        const allowedGenders = eventData.allowed_genders
+
+        // If both Male and Female are allowed, everyone can register
+        if (allowedGenders.includes('Male') && allowedGenders.includes('Female')) {
+            setGenderEligibilityError('')
+            return true
+        }
+
+        // Check if user's gender matches allowed genders
+        if (!allowedGenders.includes(userGender)) {
+            if (allowedGenders.includes('Male')) {
+                setGenderEligibilityError('⚠️ This event is only for Boys')
+            } else if (allowedGenders.includes('Female')) {
+                setGenderEligibilityError('⚠️ This event is only for Girls')
+            } else {
+                setGenderEligibilityError('⚠️ You are not eligible for this event')
+            }
+            return false
+        }
+
+        setGenderEligibilityError('')
+        return true
     }
 
     const onDrop = useCallback((acceptedFiles) => {
@@ -245,6 +302,23 @@ export default function EventRegistration() {
                     </p>
                 </div>
                 <div className="px-4 py-5 sm:p-6">
+                    {/* Gender Eligibility Warning */}
+                    {genderEligibilityError && (
+                        <div className="mb-6 rounded-md bg-red-50 p-4 border border-red-200">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <AlertCircle className="h-5 w-5 text-red-400" />
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-red-800">Not Eligible</h3>
+                                    <div className="mt-2 text-sm text-red-700">
+                                        <p>{genderEligibilityError}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         {/* Payment Mode Selector */}
                         <div>
@@ -443,7 +517,7 @@ export default function EventRegistration() {
                         <div className="pt-4">
                             <button
                                 type="submit"
-                                disabled={uploading}
+                                disabled={uploading || genderEligibilityError}
                                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                             >
                                 {uploading ? (
@@ -451,6 +525,8 @@ export default function EventRegistration() {
                                         <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
                                         Submitting...
                                     </>
+                                ) : genderEligibilityError ? (
+                                    'Not Eligible for This Event'
                                 ) : (
                                     'Submit Registration'
                                 )}

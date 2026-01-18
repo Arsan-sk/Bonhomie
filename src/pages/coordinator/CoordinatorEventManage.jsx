@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, Users, Trophy, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { ArrowLeft, Edit2, Users, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
@@ -19,17 +20,15 @@ export default function CoordinatorEventManage() {
     const [loadingParticipants, setLoadingParticipants] = useState(false)
     const [participantSearch, setParticipantSearch] = useState('')
 
-    // Rounds State
-    const [rounds, setRounds] = useState([])
-    const [loadingRounds, setLoadingRounds] = useState(false)
-    const [isRoundModalOpen, setIsRoundModalOpen] = useState(false)
-    const [roundForm, setRoundForm] = useState({ name: '', type: 'elimination', sequence_order: 1 })
-
     // Results State
-    const [selectedRoundId, setSelectedRoundId] = useState('')
-    const [roundParticipants, setRoundParticipants] = useState([])
     const [loadingResults, setLoadingResults] = useState(false)
-    const [resultsView, setResultsView] = useState('manage') // 'manage' or 'leaderboard'
+    const [resultForm, setResultForm] = useState({ first_place: '', second_place: '', third_place: '' })
+    const [announcingResults, setAnnouncingResults] = useState(false)
+
+    // Control Tab State
+    const [isGoingLive, setIsGoingLive] = useState(false)
+    const [showDateWarning, setShowDateWarning] = useState(false)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null })
 
     // Payments State
     const [payments, setPayments] = useState([])
@@ -43,18 +42,9 @@ export default function CoordinatorEventManage() {
     }, [id])
 
     useEffect(() => {
-        if (activeTab === 'participants' || activeTab === 'analytics') fetchParticipants()
-        if (activeTab === 'rounds' || activeTab === 'results') fetchRounds()
+        if (activeTab === 'overview' || activeTab === 'participants' || activeTab === 'analytics') fetchParticipants()
         if (activeTab === 'payments') fetchPayments()
     }, [activeTab, id])
-
-    useEffect(() => {
-        if (selectedRoundId) {
-            fetchRoundParticipants(selectedRoundId)
-        } else if (activeTab === 'results' && rounds.length > 0 && !selectedRoundId) {
-            setSelectedRoundId(rounds[0].id)
-        }
-    }, [activeTab, selectedRoundId, rounds])
 
     const toggleTeamExpansion = (registrationId) => {
         setExpandedTeams(prev => {
@@ -86,29 +76,7 @@ export default function CoordinatorEventManage() {
         setLoadingParticipants(false)
     }
 
-    const fetchRounds = async () => {
-        setLoadingRounds(true)
-        const { data, error } = await supabase.from('rounds')
-            .select('*')
-            .eq('event_id', id)
-            .order('sequence_order', { ascending: true })
-        if (error) console.error(error)
-        else {
-            setRounds(data || [])
-            if (data && data.length > 0 && !selectedRoundId) setSelectedRoundId(data[0].id)
-        }
-        setLoadingRounds(false)
-    }
 
-    const fetchRoundParticipants = async (roundId) => {
-        setLoadingResults(true)
-        const { data, error } = await supabase.from('round_participants')
-            .select(`*, registration:registrations!registration_id(user:profiles(full_name))`)
-            .eq('round_id', roundId)
-        if (error) console.error(error)
-        else setRoundParticipants(data || [])
-        setLoadingResults(false)
-    }
 
     const fetchPayments = async () => {
         setLoadingPayments(true)
@@ -283,18 +251,7 @@ export default function CoordinatorEventManage() {
     }
 
 
-    const handleCreateRound = async () => {
-        const { error } = await supabase.from('rounds').insert([{ ...roundForm, event_id: id }])
-        if (error) alert('Error creating round')
-        else { setIsRoundModalOpen(false); fetchRounds() }
-    }
 
-    const handleDeleteRound = async (roundId) => {
-        if (!confirm("Delete this round?")) return
-        const { error } = await supabase.from('rounds').delete().eq('id', roundId)
-        if (error) alert("Error deleting round")
-        else fetchRounds()
-    }
 
     const handleRejectParticipant = async (registrationId) => {
         if (!confirm('Are you sure you want to reject this participant?')) return
@@ -303,24 +260,7 @@ export default function CoordinatorEventManage() {
         else fetchParticipants()
     }
 
-    const updateScore = async (rpId, score) => {
-        await supabase.from('round_participants').update({ score }).eq('id', rpId)
-    }
 
-    const promoteParticipant = async (rpId, status) => {
-        await supabase.from('round_participants').update({ status }).eq('id', rpId)
-        fetchRoundParticipants(selectedRoundId)
-    }
-
-    const populateRound1 = async () => {
-        if (!selectedRoundId) return
-        const { data: confirmed } = await supabase.from('registrations').select('id').eq('event_id', id).eq('status', 'confirmed')
-        if (!confirmed) return
-        const inserts = confirmed.map(r => ({ round_id: selectedRoundId, registration_id: r.id, status: 'pending' }))
-        const { error } = await supabase.from('round_participants').insert(inserts)
-        if (error) alert('Error populating participants')
-        else fetchRoundParticipants(selectedRoundId)
-    }
 
     const verifyPayment = async (registrationId) => {
         try {
@@ -368,28 +308,194 @@ export default function CoordinatorEventManage() {
         }
     }
 
-    const exportResults = () => {
-        if (roundParticipants.length === 0) {
-            alert('No participants to export')
+    // Control Tab Functions
+    const checkEventDateMatch = () => {
+        if (!event?.event_date) return false
+        const today = new Date().toISOString().split('T')[0]
+        const eventDate = new Date(event.event_date).toISOString().split('T')[0]
+        return today === eventDate
+    }
+
+    const handleGoLive = async (forceLive = false) => {
+        if (!forceLive && !checkEventDateMatch()) {
+            setShowDateWarning(true)
             return
         }
 
-        // Sort by score descending
-        const sorted = [...roundParticipants]
-            .filter(rp => rp.status !== 'eliminated')
-            .sort((a, b) => (b.score || 0) - (a.score || 0))
+        setIsGoingLive(true)
+        try {
+            const { error } = await supabase
+                .from('events')
+                .update({
+                    is_live: true,
+                    event_status: 'live',
+                    live_started_at: new Date().toISOString()
+                })
+                .eq('id', id)
 
-        const csv = sorted.map((rp, i) =>
-            `${i + 1},"${rp.registration?.user?.full_name || 'Unknown'}",${rp.registration?.user?.roll_number || '-'},${rp.score || 0},${rp.status}`
-        ).join('\n')
+            if (error) throw error
 
-        const blob = new Blob([`Rank,Name,Roll Number,Score,Status\n${csv}`], { type: 'text/csv' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${event.name}_results_${Date.now()}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
+            await fetchEventDetails()
+            alert('Event is now LIVE! 🔴')
+        } catch (error) {
+            console.error('Error going live:', error)
+            alert('Failed to go live: ' + error.message)
+        } finally {
+            setIsGoingLive(false)
+            setShowDateWarning(false)
+        }
+    }
+
+    const handleEndLive = async () => {
+        if (!confirm('Stop live broadcasting? You can go live again anytime.')) return
+
+        setIsGoingLive(true)
+        try {
+            const { error } = await supabase
+                .from('events')
+                .update({
+                    is_live: false,
+                    event_status: 'upcoming',
+                    live_ended_at: new Date().toISOString()
+                })
+                .eq('id', id)
+
+            if (error) throw error
+
+            await fetchEventDetails()
+            alert('Event is now offline. You can go live again anytime!')
+        } catch (error) {
+            console.error('Error stopping live:', error)
+            alert('Failed to stop live: ' + error.message)
+        } finally {
+            setIsGoingLive(false)
+        }
+    }
+
+    // Results Functions
+    const handleAnnounceResults = async () => {
+        if (!resultForm.first_place) {
+            setConfirmDialog({
+                isOpen: true,
+                type: 'warning',
+                title: 'Missing Winner',
+                message: 'At least first place winner must be selected before announcing results.',
+                confirmText: 'OK',
+                showCancel: false,
+                onConfirm: () => {}
+            })
+            return
+        }
+
+        setConfirmDialog({
+            isOpen: true,
+            type: 'confirm',
+            title: 'Announce Results?',
+            message: 'This will update win counts for all winners and mark the event as completed. This action cannot be undone.',
+            confirmText: 'Announce Results',
+            cancelText: 'Cancel',
+            showCancel: true,
+            onConfirm: async () => {
+                setAnnouncingResults(true)
+                try {
+                    // Get current user ID
+                    const { data: { user } } = await supabase.auth.getUser()
+                    const currentUserId = user?.id
+
+                    // Process each position
+                    const positions = [
+                        { key: 'first_place', position: 1 },
+                        { key: 'second_place', position: 2 },
+                        { key: 'third_place', position: 3 }
+                    ]
+
+                    for (const { key, position } of positions) {
+                        const regId = resultForm[key]
+                        if (!regId) continue
+
+                        // Get registration with team members
+                        const { data: registration, error: regError } = await supabase
+                            .from('registrations')
+                            .select('*, user:profiles(id)')
+                            .eq('id', regId)
+                            .single()
+
+                        if (regError || !registration) {
+                            console.error('Error fetching registration:', regError)
+                            continue
+                        }
+
+                        // Collect all profile IDs (leader + team members)
+                        const profileIds = [registration.user.id]
+                        if (registration.team_members && registration.team_members.length > 0) {
+                            profileIds.push(...registration.team_members.map(m => m.id))
+                        }
+
+                        // Increment win counts
+                        const { error: rpcError } = await supabase.rpc('increment_win_count', {
+                            profile_ids: profileIds,
+                            place_position: position
+                        })
+
+                        if (rpcError) {
+                            console.error('Error incrementing win counts:', rpcError)
+                            throw rpcError
+                        }
+
+                        // Store result in event_results table
+                        const { error: insertError } = await supabase.from('event_results').insert({
+                            event_id: id,
+                            registration_id: regId,
+                            position: position,
+                            team_members: registration.team_members || [],
+                            announced_by: currentUserId
+                        })
+
+                        if (insertError) {
+                            console.error('Error storing result:', insertError)
+                        }
+                    }
+
+                    // Update event with winners and mark results as announced
+                    const { error: updateError } = await supabase.from('events').update({
+                        winner_profile_id: resultForm.first_place || null,
+                        runnerup_profile_id: resultForm.second_place || null,
+                        second_runnerup_profile_id: resultForm.third_place || null,
+                        results_announced: true,
+                        results_announced_at: new Date().toISOString(),
+                        event_status: 'completed'
+                    }).eq('id', id)
+
+                    if (updateError) throw updateError
+
+                    setConfirmDialog({
+                        isOpen: true,
+                        type: 'success',
+                        title: 'Results Announced!',
+                        message: '✅ Results have been announced successfully! Win counts have been updated for all winners.',
+                        confirmText: 'OK',
+                        showCancel: false,
+                        onConfirm: () => {}
+                    })
+                    
+                    await fetchEventDetails()
+                    if (activeTab === 'participants') await fetchParticipants()
+                } catch (error) {
+                    console.error('Error announcing results:', error)
+                    setConfirmDialog({
+                        isOpen: true,
+                        type: 'error',
+                        title: 'Failed to Announce Results',
+                        message: 'An error occurred: ' + error.message,
+                        confirmText: 'OK',
+                        showCancel: false,
+                        onConfirm: () => {}
+                    })
+                } finally {
+                    setAnnouncingResults(false)
+                }
+            }
+        })
     }
 
     if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
@@ -397,10 +503,10 @@ export default function CoordinatorEventManage() {
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: Clock },
-        { id: 'payments', label: 'Payments', icon: DollarSign }, // Moved to 2nd position
+        { id: 'payments', label: 'Payments', icon: DollarSign },
         { id: 'participants', label: 'Participants', icon: Users },
-        { id: 'rounds', label: 'Rounds', icon: Trophy },
         { id: 'results', label: 'Results', icon: BarChart3 },
+        { id: 'control', label: 'Control', icon: Activity },
     ]
 
     const participantColumns = [
@@ -731,120 +837,358 @@ export default function CoordinatorEventManage() {
                             )}
                         </div>
                     )}
-                    {/* ROUNDS */}
-                    {activeTab === 'rounds' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Rounds Management</h3><p className="text-sm text-gray-500">Define the competition structure.</p></div>
-                                <button onClick={() => setIsRoundModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-md"><Plus className="h-4 w-4" /> Add Round</button>
-                            </div>
-                            {loadingRounds ? (<div className="text-center py-8">Loading Rounds...</div>) : rounds.length === 0 ? (<div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200"><Trophy className="h-10 w-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No rounds created yet.</p></div>) : (<div className="space-y-4">{rounds.map(round => (<div key={round.id} className="flex justify-between items-center p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"><div className="flex items-center gap-4"><div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">{round.sequence_order}</div><div><h4 className="font-bold text-gray-900">{round.name}</h4><p className="text-xs text-gray-500 uppercase">{round.type} • {round.status}</p></div></div><div className="flex gap-2"><button onClick={() => handleDeleteRound(round.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="h-4 w-4" /></button></div></div>))}</div>)}
-                            {isRoundModalOpen && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-                                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Create Round</h3>
-                                        <div className="space-y-4"><AdminInput label="Round Name" placeholder="e.g. Qualification Round" value={roundForm.name} onChange={e => setRoundForm({ ...roundForm, name: e.target.value })} /><AdminInput label="Sequence Order" type="number" value={roundForm.sequence_order} onChange={e => setRoundForm({ ...roundForm, sequence_order: e.target.value })} /><AdminSelect label="Type" value={roundForm.type} onChange={e => setRoundForm({ ...roundForm, type: e.target.value })}><option value="elimination">Elimination</option><option value="scoring">Scoring (Points)</option><option value="final">Final</option></AdminSelect></div>
-                                        <div className="mt-6 flex justify-end gap-3"><button onClick={() => setIsRoundModalOpen(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Cancel</button><button onClick={handleCreateRound} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">Create Round</button></div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+
                     {/* RESULTS */}
                     {activeTab === 'results' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex justify-between items-center mb-6">
-                                <div><h3 className="text-lg font-bold text-gray-900">Score & Results</h3><p className="text-sm text-gray-500">Enter scores and view leaderboard.</p></div>
-                                <div className="flex gap-3">
-                                    {/* View Toggle */}
-                                    <div className="flex bg-gray-100 rounded-lg p-1">
-                                        <button onClick={() => setResultsView('manage')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'manage' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Manage Scores</button>
-                                        <button onClick={() => setResultsView('leaderboard')} className={`px-3 py-1.5 text-sm font-semibold rounded-md transition ${resultsView === 'leaderboard' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600'}`}>Leaderboard</button>
-                                    </div>
-                                    <div className="w-64">
-                                        <AdminSelect value={selectedRoundId} onChange={e => setSelectedRoundId(e.target.value)}>
-                                            <option value="" disabled>Select Round</option>
-                                            {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                        </AdminSelect>
-                                    </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Results & Winners</h3>
+                                    <p className="text-sm text-gray-500">Select winners and announce results</p>
                                 </div>
+                                {event?.results_announced && (
+                                    <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold flex items-center gap-2">
+                                        <Check className="h-5 w-5" /> Results Announced
+                                    </span>
+                                )}
                             </div>
 
-                            {!selectedRoundId ? (
-                                <div className="text-center py-20 bg-gray-50 rounded-2xl"><p className="text-gray-500">Please select a round to manage results.</p></div>
-                            ) : (
-                                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                    {roundParticipants.length === 0 ? (
-                                        <div className="p-8 text-center">
-                                            <p className="text-gray-500 mb-4">No participants found in this round.</p>
-                                            <button onClick={populateRound1} className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100">Fetch Participants from Registrations</button>
+                            <div className="space-y-6">
+                                {/* Winner Selection Form */}
+                                <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
+                                    <h4 className="text-lg font-bold text-gray-900 mb-4">🏆 Select Winners</h4>
+                                    
+                                    {participants.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                            <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                                            <p className="text-gray-500 mb-2">No confirmed participants yet</p>
+                                            <p className="text-sm text-gray-400">Participants must be confirmed before announcing results</p>
                                         </div>
-                                    ) : resultsView === 'leaderboard' ? (
-                                        // LEADERBOARD VIEW
-                                        (() => {
-                                            const ranked = [...roundParticipants]
-                                                .filter(rp => rp.status !== 'eliminated')
-                                                .sort((a, b) => (b.score || 0) - (a.score || 0))
+                                    ) : (
+                                        <div className="space-y-6">
+                                            {/* First Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥇</span> First Place (Required)
+                                                </label>
+                                                <select
+                                                    value={resultForm.first_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, first_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-yellow-300 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-yellow-50"
+                                                >
+                                                    <option value="">-- Select First Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed')
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
 
-                                            return (
-                                                <div className="p-6 space-y-4">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <h4 className="text-lg font-bold">🏆 Leaderboard</h4>
-                                                        <button onClick={exportResults} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md">
-                                                            <Download className="h-4 w-4" /> Export CSV
-                                                        </button>
-                                                    </div>
-                                                    {ranked.length === 0 ? (
-                                                        <p className="text-center text-gray-500 py-8">No qualified participants yet</p>
-                                                    ) : (
-                                                        ranked.map((rp, index) => (
-                                                            <div key={rp.id} className={`flex items-center gap-4 p-4 rounded-xl transition ${index === 0 ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 shadow-md' :
-                                                                index === 1 ? 'bg-gradient-to-r from-gray-50 to-slate-100 border-2 border-gray-400' :
-                                                                    index === 2 ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300' :
-                                                                        'bg-gray-50 border border-gray-200'
-                                                                }`}>
-                                                                <div className="text-3xl font-bold w-14 text-center">
-                                                                    {index + 1}
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <div className="font-bold text-lg text-gray-900">{rp.registration?.user?.full_name || 'Unknown'}</div>
-                                                                    <div className="text-sm text-gray-600">{rp.registration?.user?.roll_number || '-'}</div>
-                                                                </div>
-                                                                <div className="text-2xl font-bold text-indigo-600">
-                                                                    {rp.score || 0} pts
-                                                                </div>
-                                                                {index < 3 && (
-                                                                    <div className="text-4xl">
-                                                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                                            {/* Second Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥈</span> Second Place (Optional)
+                                                </label>
+                                                <select
+                                                    value={resultForm.second_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, second_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-gray-50"
+                                                >
+                                                    <option value="">-- Select Second Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place)
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Third Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥉</span> Third Place (Optional)
+                                                </label>
+                                                <select
+                                                    value={resultForm.third_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, third_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-orange-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-orange-50"
+                                                >
+                                                    <option value="">-- Select Third Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place && p.id !== resultForm.second_place)
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Announce Button */}
+                                            {!event?.results_announced && (
+                                                <button
+                                                    onClick={handleAnnounceResults}
+                                                    disabled={!resultForm.first_place || announcingResults}
+                                                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <BarChart3 className="h-6 w-6" />
+                                                    {announcingResults ? 'Announcing...' : '📢 Announce Results'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Current Results Display (if announced) */}
+                                {event?.results_announced && (
+                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-2 border-green-200 shadow-lg p-6">
+                                        <h4 className="font-bold text-green-800 mb-4 text-xl flex items-center gap-2">
+                                            <Check className="h-6 w-6" /> Results Announced
+                                        </h4>
+                                        <div className="text-sm text-green-700 mb-4">
+                                            Announced on: {event.results_announced_at ? new Date(event.results_announced_at).toLocaleString() : 'N/A'}
+                                        </div>
+                                        
+                                        <div className="space-y-3">
+                                            {/* Display winners */}
+                                            {[
+                                                { key: 'first_place', label: '🥇 First Place', id: event.winner_profile_id },
+                                                { key: 'second_place', label: '🥈 Second Place', id: event.runnerup_profile_id },
+                                                { key: 'third_place', label: '🥉 Third Place', id: event.second_runnerup_profile_id }
+                                            ].map(({ key, label, id: winnerId }) => {
+                                                if (!winnerId) return null
+                                                const winner = participants.find(p => p.id === winnerId)
+                                                if (!winner) return null
+                                                
+                                                return (
+                                                    <div key={key} className="bg-white rounded-xl p-4 shadow-sm border border-green-200">
+                                                        <div className="font-semibold text-gray-700 mb-2">{label}</div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg">
+                                                                {winner.user?.avatar_url ? (
+                                                                    <img src={winner.user.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+                                                                ) : (
+                                                                    <span>{winner.user?.full_name?.charAt(0) || 'U'}</span>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">{winner.user?.full_name}</div>
+                                                                <div className="text-sm text-gray-500">{winner.user?.roll_number}</div>
+                                                                {winner.team_members?.length > 0 && (
+                                                                    <div className="text-xs text-purple-600 font-semibold mt-1">
+                                                                        Team Leader • {winner.team_members.length + 1} members
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            )
-                                        })()
-                                    ) : (
-                                        // MANAGE SCORES VIEW (existing table)
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500"><tr><th className="px-6 py-4">Participant</th><th className="px-6 py-4">Score</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {roundParticipants.map(rp => (
-                                                    <tr key={rp.id} className="hover:bg-gray-50/50">
-                                                        <td className="px-6 py-4 font-medium text-gray-900">{rp.registration?.user?.full_name}</td>
-                                                        <td className="px-6 py-4"><input type="number" className="w-20 px-2 py-1 border rounded" defaultValue={rp.score || 0} onBlur={(e) => updateScore(rp.id, e.target.value)} /></td>
-                                                        <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${rp.status === 'qualified' ? 'bg-green-100 text-green-700' : rp.status === 'eliminated' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{rp.status}</span></td>
-                                                        <td className="px-6 py-4 flex gap-2">
-                                                            <button onClick={() => promoteParticipant(rp.id, 'qualified')} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Qualify"><Check className="h-4 w-4" /></button>
-                                                            <button onClick={() => promoteParticipant(rp.id, 'eliminated')} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Eliminate"><XIcon className="h-4 w-4" /></button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Info Box */}
+                                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                                    <div className="flex gap-3">
+                                        <div className="text-blue-600 mt-0.5">ℹ️</div>
+                                        <div className="text-sm text-blue-900">
+                                            <p className="font-semibold mb-1">About Results</p>
+                                            <ul className="list-disc list-inside space-y-1 text-blue-800">
+                                                <li>Select winners from confirmed participants only</li>
+                                                <li>Win counts are automatically updated in user profiles</li>
+                                                <li>For team events, all team members get win count increments</li>
+                                                <li>Results cannot be changed once announced</li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
+                        </div>
+                    )}
+                    {/* CONTROL */}
+                    {activeTab === 'control' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Live Event Control</h3>
+                                    <p className="text-sm text-gray-500">Manage event live status and visibility</p>
+                                </div>
+                            </div>
+
+                            {/* Live Status Card */}
+                            <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+                                <div className={`p-6 ${event?.is_live ? 'bg-gradient-to-r from-red-50 to-orange-50 border-b-4 border-red-500' : 'bg-gray-50'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            {event?.is_live ? (
+                                                <>
+                                                    <div className="relative">
+                                                        <Activity className="h-12 w-12 text-red-600 animate-pulse" />
+                                                        <div className="absolute -top-1 -right-1 h-4 w-4 bg-red-600 rounded-full animate-ping"></div>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-2xl font-bold text-red-600 flex items-center gap-2">
+                                                            🔴 LIVE NOW
+                                                        </h4>
+                                                        <p className="text-sm text-gray-600 mt-1">
+                                                            Started: {event.live_started_at ? new Date(event.live_started_at).toLocaleString() : 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                        <Activity className="h-6 w-6 text-gray-400" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-2xl font-bold text-gray-900">Event Offline</h4>
+                                                        <p className="text-sm text-gray-500 mt-1">Not currently visible in "Happening Now"</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm text-gray-500 mb-1">Status</div>
+                                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${
+                                                event?.event_status === 'ongoing' ? 'bg-green-100 text-green-700' :
+                                                event?.event_status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                'bg-gray-100 text-gray-700'
+                                            }`}>
+                                                {event?.event_status || 'upcoming'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Event Info */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Event Date</div>
+                                            <div className="text-lg font-bold text-gray-900">{event?.event_date || 'Not set'}</div>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Today's Date</div>
+                                            <div className="text-lg font-bold text-gray-900">{new Date().toISOString().split('T')[0]}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Date Match Indicator */}
+                                    {event?.event_date && (
+                                        <div className={`p-4 rounded-xl border-2 ${
+                                            checkEventDateMatch() 
+                                                ? 'bg-green-50 border-green-200' 
+                                                : 'bg-yellow-50 border-yellow-200'
+                                        }`}>
+                                            <div className="flex items-center gap-3">
+                                                {checkEventDateMatch() ? (
+                                                    <>
+                                                        <Check className="h-6 w-6 text-green-600" />
+                                                        <div>
+                                                            <div className="font-bold text-green-900">Event Date Matches</div>
+                                                            <div className="text-sm text-green-700">You can go live without warnings</div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <XIcon className="h-6 w-6 text-yellow-600" />
+                                                        <div>
+                                                            <div className="font-bold text-yellow-900">Date Mismatch Warning</div>
+                                                            <div className="text-sm text-yellow-700">Today is not the scheduled event date</div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Control Buttons */}
+                                    <div className="flex gap-4">
+                                        {!event?.is_live ? (
+                                            <button
+                                                onClick={() => handleGoLive(false)}
+                                                disabled={isGoingLive}
+                                                className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-bold text-lg hover:from-red-700 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <Activity className="h-6 w-6" />
+                                                {isGoingLive ? 'Going Live...' : '🔴 Go Live'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleEndLive}
+                                                disabled={isGoingLive}
+                                                className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gray-600 text-white rounded-xl font-bold text-lg hover:bg-gray-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <XIcon className="h-6 w-6" />
+                                                {isGoingLive ? 'Stopping...' : 'Stop Live'}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Info Box */}
+                                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                                        <div className="flex gap-3">
+                                            <div className="text-blue-600 mt-0.5">ℹ️</div>
+                                            <div className="text-sm text-blue-900">
+                                                <p className="font-semibold mb-1">About Live Events</p>
+                                                <ul className="list-disc list-inside space-y-1 text-blue-800">
+                                                    <li>Live events appear in the "Happening Now" section for students</li>
+                                                    <li>You can override date warnings if needed</li>
+                                                    <li>Event status automatically updates when going live or ending</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Date Warning Modal */}
+                    {showDateWarning && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+                                <div className="text-center mb-6">
+                                    <div className="h-16 w-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <span className="text-4xl">⚠️</span>
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Date Mismatch Warning</h3>
+                                    <p className="text-gray-600">
+                                        Today is <span className="font-bold text-gray-900">{new Date().toISOString().split('T')[0]}</span>
+                                        <br />
+                                        Event is scheduled for <span className="font-bold text-gray-900">{event?.event_date}</span>
+                                    </p>
+                                    <p className="text-sm text-yellow-700 mt-3 bg-yellow-50 p-3 rounded-lg">
+                                        Are you sure you want to go live anyway?
+                                    </p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowDateWarning(false)}
+                                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => handleGoLive(true)}
+                                        className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-semibold hover:from-red-700 hover:to-orange-700 transition shadow-lg"
+                                    >
+                                        Go Live Anyway
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                     {/* PAYMENTS */}
@@ -1130,6 +1474,19 @@ export default function CoordinatorEventManage() {
                     </div>
                 </div>
             )}
+
+            {/* Unified Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                onConfirm={confirmDialog.onConfirm}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                type={confirmDialog.type}
+                confirmText={confirmDialog.confirmText}
+                cancelText={confirmDialog.cancelText}
+                showCancel={confirmDialog.showCancel}
+            />
         </div>
     )
 }

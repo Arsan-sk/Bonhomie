@@ -49,7 +49,7 @@ export default function Login() {
             if (profileError) {
                 console.error('Profile fetch error:', profileError)
                 // Default to student dashboard if profile fetch fails
-                navigate('/dashboard')
+                navigate('/student/dashboard')
                 return
             }
 

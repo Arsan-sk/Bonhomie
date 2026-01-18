@@ -63,7 +63,7 @@ export default function EventCard({ event, baseUrl = '/events', festSettings }) 
                         to={`${baseUrl}/${event.id}`}
                         className="flex w-full items-center justify-center rounded-lg border border-transparent bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
                     >
-                        View Details
+                        {baseUrl.includes('coordinator') ? 'Manage Event' : 'View Details'}
                     </Link>
                 </div>
             </div>

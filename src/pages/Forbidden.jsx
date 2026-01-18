@@ -7,7 +7,7 @@ export default function Forbidden() {
     const { isAdmin, isCoordinator } = useAuth()
 
     // Determine user's home route
-    const homeRoute = isAdmin ? '/admin/dashboard' : isCoordinator ? '/coordinator/dashboard' : '/dashboard'
+    const homeRoute = isAdmin ? '/admin/dashboard' : isCoordinator ? '/coordinator/dashboard' : '/student/dashboard'
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center px-4">

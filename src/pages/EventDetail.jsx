@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle } from 'lucide-react'
+import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle, UserCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { formatEventDate, formatTime12Hour } from '../lib/dateUtils'
 
@@ -314,6 +314,22 @@ export default function EventDetail() {
                                         <p className="font-medium text-gray-900">{event.subcategory}</p>
                                         <p className="text-sm text-gray-500">
                                             {event.subcategory === 'Group' ? `Team: ${event.min_team_size}-${event.max_team_size} members` : 'Individual Participation'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-start">
+                                    <UserCircle2 className="h-5 w-5 text-gray-400 mt-0.5 mr-3" />
+                                    <div>
+                                        <p className="font-medium text-gray-900">Eligibility</p>
+                                        <p className="text-sm text-gray-500">
+                                            {event.allowed_genders && event.allowed_genders.length > 0 
+                                                ? event.allowed_genders.includes('Male') && event.allowed_genders.includes('Female')
+                                                    ? 'Open to All'
+                                                    : event.allowed_genders.includes('Male')
+                                                        ? 'Boys Only'
+                                                        : 'Girls Only'
+                                                : 'Open to All'
+                                            }
                                         </p>
                                     </div>
                                 </div>
