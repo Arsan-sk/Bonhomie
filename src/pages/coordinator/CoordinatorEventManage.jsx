@@ -21,6 +21,8 @@ export default function CoordinatorEventManage() {
 
     // Results State
     const [loadingResults, setLoadingResults] = useState(false)
+    const [resultForm, setResultForm] = useState({ first_place: '', second_place: '', third_place: '' })
+    const [announcingResults, setAnnouncingResults] = useState(false)
 
     // Control Tab State
     const [isGoingLive, setIsGoingLive] = useState(false)
@@ -365,6 +367,98 @@ export default function CoordinatorEventManage() {
             alert('Failed to end event: ' + error.message)
         } finally {
             setIsGoingLive(false)
+        }
+    }
+
+    // Results Functions
+    const handleAnnounceResults = async () => {
+        if (!resultForm.first_place) {
+            alert('At least first place winner must be selected')
+            return
+        }
+
+        if (!confirm('Announce these results? This will update win counts for all winners.')) return
+
+        setAnnouncingResults(true)
+        try {
+            // Get current user ID
+            const { data: { user } } = await supabase.auth.getUser()
+            const currentUserId = user?.id
+
+            // Process each position
+            const positions = [
+                { key: 'first_place', position: 1 },
+                { key: 'second_place', position: 2 },
+                { key: 'third_place', position: 3 }
+            ]
+
+            for (const { key, position } of positions) {
+                const regId = resultForm[key]
+                if (!regId) continue
+
+                // Get registration with team members
+                const { data: registration, error: regError } = await supabase
+                    .from('registrations')
+                    .select('*, user:profiles(id)')
+                    .eq('id', regId)
+                    .single()
+
+                if (regError || !registration) {
+                    console.error('Error fetching registration:', regError)
+                    continue
+                }
+
+                // Collect all profile IDs (leader + team members)
+                const profileIds = [registration.user.id]
+                if (registration.team_members && registration.team_members.length > 0) {
+                    profileIds.push(...registration.team_members.map(m => m.id))
+                }
+
+                // Increment win counts
+                const { error: rpcError } = await supabase.rpc('increment_win_count', {
+                    profile_ids: profileIds,
+                    place_position: position
+                })
+
+                if (rpcError) {
+                    console.error('Error incrementing win counts:', rpcError)
+                    throw rpcError
+                }
+
+                // Store result in event_results table
+                const { error: insertError } = await supabase.from('event_results').insert({
+                    event_id: id,
+                    registration_id: regId,
+                    position: position,
+                    team_members: registration.team_members || [],
+                    announced_by: currentUserId
+                })
+
+                if (insertError) {
+                    console.error('Error storing result:', insertError)
+                }
+            }
+
+            // Update event with winners and mark results as announced
+            const { error: updateError } = await supabase.from('events').update({
+                winner_profile_id: resultForm.first_place || null,
+                runnerup_profile_id: resultForm.second_place || null,
+                second_runnerup_profile_id: resultForm.third_place || null,
+                results_announced: true,
+                results_announced_at: new Date().toISOString(),
+                event_status: 'completed'
+            }).eq('id', id)
+
+            if (updateError) throw updateError
+
+            alert('✅ Results announced successfully! Win counts updated for all winners.')
+            await fetchEventDetails()
+            if (activeTab === 'participants') await fetchParticipants()
+        } catch (error) {
+            console.error('Error announcing results:', error)
+            alert('Failed to announce results: ' + error.message)
+        } finally {
+            setAnnouncingResults(false)
         }
     }
 
@@ -713,10 +807,179 @@ export default function CoordinatorEventManage() {
                     {/* RESULTS */}
                     {activeTab === 'results' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                <BarChart3 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Results Management</h3>
-                                <p className="text-gray-500">Results system will be implemented here.</p>
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Results & Winners</h3>
+                                    <p className="text-sm text-gray-500">Select winners and announce results</p>
+                                </div>
+                                {event?.results_announced && (
+                                    <span className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold flex items-center gap-2">
+                                        <Check className="h-5 w-5" /> Results Announced
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Winner Selection Form */}
+                                <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-6">
+                                    <h4 className="text-lg font-bold text-gray-900 mb-4">🏆 Select Winners</h4>
+                                    
+                                    {participants.length === 0 ? (
+                                        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                            <Users className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                                            <p className="text-gray-500 mb-2">No confirmed participants yet</p>
+                                            <p className="text-sm text-gray-400">Participants must be confirmed before announcing results</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            {/* First Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥇</span> First Place (Required)
+                                                </label>
+                                                <select
+                                                    value={resultForm.first_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, first_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-yellow-300 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-yellow-50"
+                                                >
+                                                    <option value="">-- Select First Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed')
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Second Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥈</span> Second Place (Optional)
+                                                </label>
+                                                <select
+                                                    value={resultForm.second_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, second_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-gray-50"
+                                                >
+                                                    <option value="">-- Select Second Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place)
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Third Place */}
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                                                    <span className="text-2xl">🥉</span> Third Place (Optional)
+                                                </label>
+                                                <select
+                                                    value={resultForm.third_place}
+                                                    onChange={(e) => setResultForm({ ...resultForm, third_place: e.target.value })}
+                                                    disabled={event?.results_announced}
+                                                    className="w-full px-4 py-3 border-2 border-orange-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50 disabled:cursor-not-allowed bg-orange-50"
+                                                >
+                                                    <option value="">-- Select Third Place Winner --</option>
+                                                    {participants
+                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place && p.id !== resultForm.second_place)
+                                                        .map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.user?.full_name} ({p.user?.roll_number})
+                                                                {p.team_members?.length > 0 ? ` - Team Leader (${p.team_members.length + 1} members)` : ''}
+                                                            </option>
+                                                        ))}
+                                                </select>
+                                            </div>
+
+                                            {/* Announce Button */}
+                                            {!event?.results_announced && (
+                                                <button
+                                                    onClick={handleAnnounceResults}
+                                                    disabled={!resultForm.first_place || announcingResults}
+                                                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold text-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <BarChart3 className="h-6 w-6" />
+                                                    {announcingResults ? 'Announcing...' : '📢 Announce Results'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Current Results Display (if announced) */}
+                                {event?.results_announced && (
+                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-2 border-green-200 shadow-lg p-6">
+                                        <h4 className="font-bold text-green-800 mb-4 text-xl flex items-center gap-2">
+                                            <Check className="h-6 w-6" /> Results Announced
+                                        </h4>
+                                        <div className="text-sm text-green-700 mb-4">
+                                            Announced on: {event.results_announced_at ? new Date(event.results_announced_at).toLocaleString() : 'N/A'}
+                                        </div>
+                                        
+                                        <div className="space-y-3">
+                                            {/* Display winners */}
+                                            {[
+                                                { key: 'first_place', label: '🥇 First Place', id: event.winner_profile_id },
+                                                { key: 'second_place', label: '🥈 Second Place', id: event.runnerup_profile_id },
+                                                { key: 'third_place', label: '🥉 Third Place', id: event.second_runnerup_profile_id }
+                                            ].map(({ key, label, id: winnerId }) => {
+                                                if (!winnerId) return null
+                                                const winner = participants.find(p => p.id === winnerId)
+                                                if (!winner) return null
+                                                
+                                                return (
+                                                    <div key={key} className="bg-white rounded-xl p-4 shadow-sm border border-green-200">
+                                                        <div className="font-semibold text-gray-700 mb-2">{label}</div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg">
+                                                                {winner.user?.avatar_url ? (
+                                                                    <img src={winner.user.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+                                                                ) : (
+                                                                    <span>{winner.user?.full_name?.charAt(0) || 'U'}</span>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">{winner.user?.full_name}</div>
+                                                                <div className="text-sm text-gray-500">{winner.user?.roll_number}</div>
+                                                                {winner.team_members?.length > 0 && (
+                                                                    <div className="text-xs text-purple-600 font-semibold mt-1">
+                                                                        Team Leader • {winner.team_members.length + 1} members
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Info Box */}
+                                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                                    <div className="flex gap-3">
+                                        <div className="text-blue-600 mt-0.5">ℹ️</div>
+                                        <div className="text-sm text-blue-900">
+                                            <p className="font-semibold mb-1">About Results</p>
+                                            <ul className="list-disc list-inside space-y-1 text-blue-800">
+                                                <li>Select winners from confirmed participants only</li>
+                                                <li>Win counts are automatically updated in user profiles</li>
+                                                <li>For team events, all team members get win count increments</li>
+                                                <li>Results cannot be changed once announced</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
