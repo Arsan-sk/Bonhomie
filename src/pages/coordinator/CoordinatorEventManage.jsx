@@ -22,6 +22,10 @@ export default function CoordinatorEventManage() {
     // Results State
     const [loadingResults, setLoadingResults] = useState(false)
 
+    // Control Tab State
+    const [isGoingLive, setIsGoingLive] = useState(false)
+    const [showDateWarning, setShowDateWarning] = useState(false)
+
     // Payments State
     const [payments, setPayments] = useState([])
     const [loadingPayments, setLoadingPayments] = useState(false)
@@ -300,6 +304,70 @@ export default function CoordinatorEventManage() {
         }
     }
 
+    // Control Tab Functions
+    const checkEventDateMatch = () => {
+        if (!event?.event_date) return false
+        const today = new Date().toISOString().split('T')[0]
+        const eventDate = new Date(event.event_date).toISOString().split('T')[0]
+        return today === eventDate
+    }
+
+    const handleGoLive = async (forceLive = false) => {
+        if (!forceLive && !checkEventDateMatch()) {
+            setShowDateWarning(true)
+            return
+        }
+
+        setIsGoingLive(true)
+        try {
+            const { error } = await supabase
+                .from('events')
+                .update({
+                    is_live: true,
+                    event_status: 'ongoing',
+                    live_started_at: new Date().toISOString()
+                })
+                .eq('id', id)
+
+            if (error) throw error
+
+            await fetchEventDetails()
+            alert('Event is now LIVE! 🔴')
+        } catch (error) {
+            console.error('Error going live:', error)
+            alert('Failed to go live: ' + error.message)
+        } finally {
+            setIsGoingLive(false)
+            setShowDateWarning(false)
+        }
+    }
+
+    const handleEndLive = async () => {
+        if (!confirm('End the live event? This will stop displaying it in the "Happening Now" section.')) return
+
+        setIsGoingLive(true)
+        try {
+            const { error } = await supabase
+                .from('events')
+                .update({
+                    is_live: false,
+                    event_status: 'completed',
+                    live_ended_at: new Date().toISOString()
+                })
+                .eq('id', id)
+
+            if (error) throw error
+
+            await fetchEventDetails()
+            alert('Event has ended successfully!')
+        } catch (error) {
+            console.error('Error ending live:', error)
+            alert('Failed to end event: ' + error.message)
+        } finally {
+            setIsGoingLive(false)
+        }
+    }
+
 
 
     if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
@@ -310,6 +378,7 @@ export default function CoordinatorEventManage() {
         { id: 'payments', label: 'Payments', icon: DollarSign },
         { id: 'participants', label: 'Participants', icon: Users },
         { id: 'results', label: 'Results', icon: BarChart3 },
+        { id: 'control', label: 'Control', icon: Activity },
     ]
 
     const participantColumns = [
@@ -648,6 +717,180 @@ export default function CoordinatorEventManage() {
                                 <BarChart3 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">Results Management</h3>
                                 <p className="text-gray-500">Results system will be implemented here.</p>
+                            </div>
+                        </div>
+                    )}
+                    {/* CONTROL */}
+                    {activeTab === 'control' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Live Event Control</h3>
+                                    <p className="text-sm text-gray-500">Manage event live status and visibility</p>
+                                </div>
+                            </div>
+
+                            {/* Live Status Card */}
+                            <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+                                <div className={`p-6 ${event?.is_live ? 'bg-gradient-to-r from-red-50 to-orange-50 border-b-4 border-red-500' : 'bg-gray-50'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            {event?.is_live ? (
+                                                <>
+                                                    <div className="relative">
+                                                        <Activity className="h-12 w-12 text-red-600 animate-pulse" />
+                                                        <div className="absolute -top-1 -right-1 h-4 w-4 bg-red-600 rounded-full animate-ping"></div>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-2xl font-bold text-red-600 flex items-center gap-2">
+                                                            🔴 LIVE NOW
+                                                        </h4>
+                                                        <p className="text-sm text-gray-600 mt-1">
+                                                            Started: {event.live_started_at ? new Date(event.live_started_at).toLocaleString() : 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                        <Activity className="h-6 w-6 text-gray-400" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-2xl font-bold text-gray-900">Event Offline</h4>
+                                                        <p className="text-sm text-gray-500 mt-1">Not currently visible in "Happening Now"</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm text-gray-500 mb-1">Status</div>
+                                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-bold ${
+                                                event?.event_status === 'ongoing' ? 'bg-green-100 text-green-700' :
+                                                event?.event_status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                'bg-gray-100 text-gray-700'
+                                            }`}>
+                                                {event?.event_status || 'upcoming'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-6">
+                                    {/* Event Info */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Event Date</div>
+                                            <div className="text-lg font-bold text-gray-900">{event?.event_date || 'Not set'}</div>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 rounded-xl">
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Today's Date</div>
+                                            <div className="text-lg font-bold text-gray-900">{new Date().toISOString().split('T')[0]}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Date Match Indicator */}
+                                    {event?.event_date && (
+                                        <div className={`p-4 rounded-xl border-2 ${
+                                            checkEventDateMatch() 
+                                                ? 'bg-green-50 border-green-200' 
+                                                : 'bg-yellow-50 border-yellow-200'
+                                        }`}>
+                                            <div className="flex items-center gap-3">
+                                                {checkEventDateMatch() ? (
+                                                    <>
+                                                        <Check className="h-6 w-6 text-green-600" />
+                                                        <div>
+                                                            <div className="font-bold text-green-900">Event Date Matches</div>
+                                                            <div className="text-sm text-green-700">You can go live without warnings</div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <XIcon className="h-6 w-6 text-yellow-600" />
+                                                        <div>
+                                                            <div className="font-bold text-yellow-900">Date Mismatch Warning</div>
+                                                            <div className="text-sm text-yellow-700">Today is not the scheduled event date</div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Control Buttons */}
+                                    <div className="flex gap-4">
+                                        {!event?.is_live ? (
+                                            <button
+                                                onClick={() => handleGoLive(false)}
+                                                disabled={isGoingLive}
+                                                className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-bold text-lg hover:from-red-700 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <Activity className="h-6 w-6" />
+                                                {isGoingLive ? 'Going Live...' : '🔴 Go Live'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleEndLive}
+                                                disabled={isGoingLive}
+                                                className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gray-600 text-white rounded-xl font-bold text-lg hover:bg-gray-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <XIcon className="h-6 w-6" />
+                                                {isGoingLive ? 'Ending...' : 'End Event'}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Info Box */}
+                                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                                        <div className="flex gap-3">
+                                            <div className="text-blue-600 mt-0.5">ℹ️</div>
+                                            <div className="text-sm text-blue-900">
+                                                <p className="font-semibold mb-1">About Live Events</p>
+                                                <ul className="list-disc list-inside space-y-1 text-blue-800">
+                                                    <li>Live events appear in the "Happening Now" section for students</li>
+                                                    <li>You can override date warnings if needed</li>
+                                                    <li>Event status automatically updates when going live or ending</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Date Warning Modal */}
+                    {showDateWarning && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+                                <div className="text-center mb-6">
+                                    <div className="h-16 w-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <span className="text-4xl">⚠️</span>
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Date Mismatch Warning</h3>
+                                    <p className="text-gray-600">
+                                        Today is <span className="font-bold text-gray-900">{new Date().toISOString().split('T')[0]}</span>
+                                        <br />
+                                        Event is scheduled for <span className="font-bold text-gray-900">{event?.event_date}</span>
+                                    </p>
+                                    <p className="text-sm text-yellow-700 mt-3 bg-yellow-50 p-3 rounded-lg">
+                                        Are you sure you want to go live anyway?
+                                    </p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowDateWarning(false)}
+                                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => handleGoLive(true)}
+                                        className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-semibold hover:from-red-700 hover:to-orange-700 transition shadow-lg"
+                                    >
+                                        Go Live Anyway
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
