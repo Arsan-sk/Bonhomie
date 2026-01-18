@@ -40,7 +40,7 @@ export default function CoordinatorEventManage() {
     }, [id])
 
     useEffect(() => {
-        if (activeTab === 'participants' || activeTab === 'analytics') fetchParticipants()
+        if (activeTab === 'overview' || activeTab === 'participants' || activeTab === 'analytics') fetchParticipants()
         if (activeTab === 'payments') fetchPayments()
     }, [activeTab, id])
 
