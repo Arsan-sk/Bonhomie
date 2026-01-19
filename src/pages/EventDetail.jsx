@@ -6,6 +6,7 @@ import { Calendar, MapPin, Clock, Users, Trophy, User, CheckCircle, AlertCircle,
 import { format } from 'date-fns'
 import { formatEventDate, formatTime12Hour } from '../lib/dateUtils'
 import { getUnsplashImageUrl, getCategoryImage } from '../utils/unsplashHelper'
+import AnimatedBannerFallback from '../components/ui/AnimatedBannerFallback'
 
 export default function EventDetail() {
     const { id } = useParams()
@@ -22,6 +23,7 @@ export default function EventDetail() {
     const [showCoordinatorModal, setShowCoordinatorModal] = useState(false)
     const [registrationStats, setRegistrationStats] = useState({ total: 0, pending: 0, confirmed: 0, rejected: 0 })
     const [activeTab, setActiveTab] = useState('description')
+    const [imageError, setImageError] = useState(false)
 
     // Detect context
     const isStudentContext = location.pathname.startsWith('/student')
@@ -158,25 +160,42 @@ export default function EventDetail() {
         <div className="bg-white min-h-screen pb-12">
             {/* Hero Image - Enhanced */}
             <div className="relative h-64 sm:h-80 lg:h-96 w-full overflow-hidden">
-                <img
-                    src={getEventImage()}
-                    alt={event.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                        e.target.src = getCategoryImage(event.category)
-                    }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-end">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pb-8">
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-lg ${event.category === 'Cultural' ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20' :
-                            event.category === 'Technical' ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-600/20' :
-                                'bg-green-100 text-green-800 ring-1 ring-green-600/20'
-                            }`}>
-                            {event.category}
-                        </span>
-                        <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl drop-shadow-lg">{event.name}</h1>
-                    </div>
-                </div>
+                {!imageError ? (
+                    <>
+                        <img
+                            src={getEventImage()}
+                            alt={event.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                console.log('Primary image failed, trying category fallback')
+                                const categoryImg = getCategoryImage(event.category)
+                                if (e.target.src !== categoryImg) {
+                                    e.target.src = categoryImg
+                                } else {
+                                    console.log('All images failed, showing animated fallback')
+                                    setImageError(true)
+                                }
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-end">
+                            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full pb-8">
+                                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold shadow-lg ${event.category === 'Cultural' ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-600/20' :
+                                    event.category === 'Technical' ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-600/20' :
+                                        'bg-green-100 text-green-800 ring-1 ring-green-600/20'
+                                    }`}>
+                                    {event.category}
+                                </span>
+                                <h1 className="mt-3 text-4xl font-bold text-white sm:text-5xl drop-shadow-lg">{event.name}</h1>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <AnimatedBannerFallback 
+                        eventName={event.name}
+                        category={event.category}
+                        height="h-64 sm:h-80 lg:h-96"
+                    />
+                )}
             </div>
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">

@@ -7,6 +7,7 @@ import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
+import AnimatedBannerFallback from '../../components/ui/AnimatedBannerFallback'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
@@ -37,6 +38,7 @@ export default function CoordinatorEventManage() {
     const [paymentModeFilter, setPaymentModeFilter] = useState('all') // 'all', 'cash', 'online'
     const [screenshotModal, setScreenshotModal] = useState({ isOpen: false, url: '' })
     const [selectedProfile, setSelectedProfile] = useState(null) // For viewing participant profile
+    const [bannerImageError, setBannerImageError] = useState(false)
 
     useEffect(() => {
         fetchEventDetails()
@@ -658,20 +660,41 @@ export default function CoordinatorEventManage() {
 
             {/* Banner - Responsive */}
             <div className="h-32 md:h-48 rounded-xl md:rounded-2xl overflow-hidden relative group">
-                <img
-                    src={event.image_path || getUnsplashImageUrl(event.name, 1200, 300)}
-                    alt={event.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.src = getCategoryImage(event.category) }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-3 md:bottom-6 left-3 md:left-6 text-white">
-                    <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm font-medium opacity-90">
-                        <span className="flex items-center gap-1.5"><Calendar className="h-3 md:h-4 w-3 md:w-4" /> {event.day}</span>
-                        <span className="flex items-center gap-1.5"><Clock className="h-3 md:h-4 w-3 md:w-4" /> {event.time}</span>
-                        <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin className="h-3 md:h-4 w-3 md:w-4" /> {event.venue}</span>
-                    </div>
-                </div>
+                {!bannerImageError ? (
+                    <>
+                        <img
+                            src={event.image_path || getUnsplashImageUrl(event.name, 1200, 300)}
+                            alt={event.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                const categoryImg = getCategoryImage(event.category)
+                                if (e.target.src !== categoryImg) {
+                                    e.target.src = categoryImg
+                                } else {
+                                    setBannerImageError(true)
+                                }
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div className="absolute bottom-3 md:bottom-6 left-3 md:left-6 text-white">
+                            <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm font-medium opacity-90">
+                                <span className="flex items-center gap-1.5"><Calendar className="h-3 md:h-4 w-3 md:w-4" /> {event.day}</span>
+                                <span className="flex items-center gap-1.5"><Clock className="h-3 md:h-4 w-3 md:w-4" /> {event.time}</span>
+                                <span className="flex items-center gap-1.5 hidden sm:flex"><MapPin className="h-3 md:h-4 w-3 md:w-4" /> {event.venue}</span>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <AnimatedBannerFallback 
+                        eventName={event.name}
+                        category={event.category}
+                        height="h-32 md:h-48"
+                        showEventInfo={true}
+                        eventDay={event.day}
+                        eventTime={event.time}
+                        eventVenue={event.venue}
+                    />
+                )}
             </div>
 
             {/* Tabs - Sticky & Responsive */}

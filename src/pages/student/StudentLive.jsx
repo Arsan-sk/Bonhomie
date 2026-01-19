@@ -3,11 +3,14 @@ import { supabase } from '../../lib/supabase'
 import { Activity, Trophy, Clock, Calendar, Users, Award, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
+import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
+import StaticCardFallback from '../../components/ui/StaticCardFallback'
 
 export default function StudentLive() {
     const [liveEvents, setLiveEvents] = useState([])
     const [recentWinners, setRecentWinners] = useState([])
     const [loading, setLoading] = useState(true)
+    const [imageErrors, setImageErrors] = useState({})
 
     useEffect(() => {
         fetchLiveData()
@@ -111,21 +114,50 @@ export default function StudentLive() {
                                     <div className="flex" style={{ height: '144px' }}>
                                         {/* Image Section */}
                                         <div className="relative flex-shrink-0" style={{ width: '192px' }}>
-                                            <img
-                                                src={event.image_path || 'https://via.placeholder.com/300x200'}
-                                                alt={event.name}
-                                                className="w-full h-full object-cover"
-                                            />
-                                            {/* Live Badge */}
-                                            <div className="absolute top-2 right-2">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-lg">
-                                                    <span className="relative flex h-1.5 w-1.5 mr-1">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                                                    </span>
-                                                    LIVE
-                                                </span>
-                                            </div>
+                                            {!imageErrors[`live-${event.id}`] ? (
+                                                <>
+                                                    <img
+                                                        src={event.image_path || getUnsplashImageUrl(event.name, 400, 300)}
+                                                        alt={event.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            const categoryImg = getCategoryImage(event.category)
+                                                            if (e.target.src !== categoryImg) {
+                                                                e.target.src = categoryImg
+                                                            } else {
+                                                                setImageErrors(prev => ({ ...prev, [`live-${event.id}`]: true }))
+                                                            }
+                                                        }}
+                                                    />
+                                                    {/* Live Badge */}
+                                                    <div className="absolute top-2 right-2">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-lg">
+                                                            <span className="relative flex h-1.5 w-1.5 mr-1">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                                                            </span>
+                                                            LIVE
+                                                        </span>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="relative h-full">
+                                                    <StaticCardFallback 
+                                                        eventName={event.name}
+                                                        category={event.category}
+                                                        height="h-full"
+                                                    />
+                                                    <div className="absolute top-2 right-2">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-lg">
+                                                            <span className="relative flex h-1.5 w-1.5 mr-1">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                                                            </span>
+                                                            LIVE
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Content Section */}
@@ -206,11 +238,29 @@ export default function StudentLive() {
                                 >
                                     <div className="flex items-start space-x-4">
                                         {/* Event Image */}
-                                        <img
-                                            src={event.image_path || 'https://via.placeholder.com/100'}
-                                            alt={event.name}
-                                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-                                        />
+                                        <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                                            {!imageErrors[`winner-${event.id}`] ? (
+                                                <img
+                                                    src={event.image_path || getUnsplashImageUrl(event.name, 200, 200)}
+                                                    alt={event.name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        const categoryImg = getCategoryImage(event.category)
+                                                        if (e.target.src !== categoryImg) {
+                                                            e.target.src = categoryImg
+                                                        } else {
+                                                            setImageErrors(prev => ({ ...prev, [`winner-${event.id}`]: true }))
+                                                        }
+                                                    }}
+                                                />
+                                            ) : (
+                                                <StaticCardFallback 
+                                                    eventName={event.name}
+                                                    category={event.category}
+                                                    height="h-full"
+                                                />
+                                            )}
+                                        </div>
 
                                         {/* Event Info */}
                                         <div className="flex-1">

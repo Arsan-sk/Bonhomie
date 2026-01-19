@@ -4,12 +4,14 @@ import { useAuth } from '../../context/AuthContext'
 import { useLocation } from 'react-router-dom'
 import { Calendar, Trophy, Activity, Award } from 'lucide-react'
 import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
+import StaticCardFallback from '../../components/ui/StaticCardFallback'
 
 export default function StudentMyEvents() {
     const { user } = useAuth()
     const location = useLocation()
     const [myRegistrations, setMyRegistrations] = useState([])
     const [loading, setLoading] = useState(true)
+    const [imageErrors, setImageErrors] = useState({})
 
     // Detect if we're in coordinator context
     const isCoordinator = location.pathname.startsWith('/coordinator')
@@ -100,28 +102,47 @@ export default function StudentMyEvents() {
                             className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
                         >
                             {/* Event Image */}
-                            <div className="h-48 overflow-hidden">
-                                <img
-                                    src={registration.event.image_path || getUnsplashImageUrl(registration.event.name, 400, 200)}
-                                    alt={registration.event.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => { e.target.src = getCategoryImage(registration.event.category) }}
-                                />
-                            </div>
-
-                            {/* Event Details */}
-                            <div className="p-6">
-                                <div className="flex items-start justify-between mb-3">
-                                    <h3 className="text-lg font-bold text-gray-900">
-                                        {registration.event.name}
-                                    </h3>
+                            <div className="h-48 overflow-hidden relative">
+                                {!imageErrors[registration.id] ? (
+                                    <img
+                                        src={registration.event.image_path || getUnsplashImageUrl(registration.event.name, 400, 200)}
+                                        alt={registration.event.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            const categoryImg = getCategoryImage(registration.event.category)
+                                            if (e.target.src !== categoryImg) {
+                                                e.target.src = categoryImg
+                                            } else {
+                                                setImageErrors(prev => ({ ...prev, [registration.id]: true }))
+                                            }
+                                        }}
+                                    />
+                                ) : (
+                                    <StaticCardFallback 
+                                        eventName={registration.event.name}
+                                        category={registration.event.category}
+                                        height="h-48"
+                                    />
+                                )}
+                                
+                                {/* Status Badge on Image */}
+                                <div className="absolute top-3 right-3">
                                     <span
-                                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold shadow-lg backdrop-blur-sm ${getStatusColor(
                                             registration.status
                                         )}`}
                                     >
                                         {registration.status.charAt(0).toUpperCase() + registration.status.slice(1)}
                                     </span>
+                                </div>
+                            </div>
+
+                            {/* Event Details */}
+                            <div className="p-6">
+                                <div className="mb-3">
+                                    <h3 className="text-lg font-bold text-gray-900 line-clamp-2">
+                                        {registration.event.name}
+                                    </h3>
                                 </div>
 
                                 <div className="space-y-2 text-sm text-gray-600">
