@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { useLocation } from 'react-router-dom'
-import { Calendar, Trophy, Activity, Award } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Calendar, Trophy, Activity, Award, ArrowRight } from 'lucide-react'
 import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelper'
 import StaticCardFallback from '../../components/ui/StaticCardFallback'
 
 export default function StudentMyEvents() {
     const { user } = useAuth()
     const location = useLocation()
+    const navigate = useNavigate()
     const [myRegistrations, setMyRegistrations] = useState([])
     const [loading, setLoading] = useState(true)
     const [imageErrors, setImageErrors] = useState({})
@@ -46,11 +47,11 @@ export default function StudentMyEvents() {
     const getStatusColor = (status) => {
         switch (status) {
             case 'confirmed':
-                return 'bg-green-100 text-green-800'
+                return 'bg-green-500/90 text-white'
             case 'rejected':
-                return 'bg-red-100 text-red-800'
+                return 'bg-red-500/90 text-white'
             default:
-                return 'bg-yellow-100 text-yellow-800'
+                return 'bg-yellow-500/90 text-white'
         }
     }
 
@@ -65,6 +66,11 @@ export default function StudentMyEvents() {
             default:
                 return 'Hybrid'
         }
+    }
+
+    const handleViewDetails = (eventId) => {
+        const targetPath = isCoordinator ? `/coordinator/browse-events/${eventId}` : `/student/events/${eventId}`
+        navigate(targetPath)
     }
 
     if (loading) {
@@ -87,27 +93,27 @@ export default function StudentMyEvents() {
                     <Trophy className="mx-auto h-12 w-12 text-gray-400" />
                     <h3 className="mt-4 text-lg font-medium text-gray-900">No registrations yet</h3>
                     <p className="mt-2 text-gray-500">Start exploring events and register to participate!</p>
-                    <a
-                        href={eventsBasePath}
+                    <button
+                        onClick={() => navigate(eventsBasePath)}
                         className="mt-4 inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                     >
                         Browse Events
-                    </a>
+                    </button>
                 </div>
             ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {myRegistrations.map((registration) => (
                         <div
                             key={registration.id}
-                            className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                            className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-indigo-200 flex flex-col h-full"
                         >
-                            {/* Event Image */}
-                            <div className="h-48 overflow-hidden relative">
+                            {/* Event Image - Fixed Height */}
+                            <div className="h-48 overflow-hidden relative flex-shrink-0">{/* Event Image */}
                                 {!imageErrors[registration.id] ? (
                                     <img
                                         src={registration.event.image_path || getUnsplashImageUrl(registration.event.name, 400, 200)}
                                         alt={registration.event.name}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                                         onError={(e) => {
                                             const categoryImg = getCategoryImage(registration.event.category)
                                             if (e.target.src !== categoryImg) {
@@ -137,50 +143,61 @@ export default function StudentMyEvents() {
                                 </div>
                             </div>
 
-                            {/* Event Details */}
-                            <div className="p-6">
+                            {/* Event Details - Flex Grow */}
+                            <div className="p-5 flex flex-col flex-grow">
+                                {/* Event Name and Category */}
                                 <div className="mb-3">
-                                    <h3 className="text-lg font-bold text-gray-900 line-clamp-2">
+                                    <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-2 min-h-[56px]">
                                         {registration.event.name}
                                     </h3>
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                        registration.event.category === 'Cultural' 
+                                            ? 'bg-purple-100 text-purple-700' 
+                                            : registration.event.category === 'Technical'
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : 'bg-green-100 text-green-700'
+                                    }`}>
+                                        {registration.event.category}
+                                    </span>
                                 </div>
 
-                                <div className="space-y-2 text-sm text-gray-600">
+                                {/* Event Info */}
+                                <div className="space-y-2.5 text-sm text-gray-600 mb-4">
                                     <div className="flex items-center">
-                                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                        <span>{registration.event.day}</span>
+                                        <Calendar className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                                        <span className="line-clamp-1">{registration.event.day}</span>
                                     </div>
                                     <div className="flex items-center">
-                                        <Activity className="h-4 w-4 mr-2 text-gray-400" />
-                                        <span>{registration.event.category}</span>
+                                        <Activity className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                                        <span className="line-clamp-1">{registration.event.subcategory || 'General'}</span>
                                     </div>
                                     <div className="flex items-center">
-                                        <Award className="h-4 w-4 mr-2 text-gray-400" />
-                                        <span>Payment: {getPaymentModeLabel(registration.payment_mode || 'hybrid')}</span>
+                                        <Award className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                                        <span className="line-clamp-1">{getPaymentModeLabel(registration.payment_mode || 'hybrid')}</span>
                                     </div>
                                 </div>
 
                                 {/* Team Members */}
                                 {registration.team_members && registration.team_members.length > 0 && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <div className="mt-auto pt-3 border-t border-gray-100">
                                         <p className="text-xs font-medium text-gray-500 mb-2">
                                             Team ({registration.team_members.length + 1} members)
                                         </p>
-                                        <div className="flex -space-x-2">
-                                            <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold border-2 border-white">
+                                        <div className="flex -space-x-2 mb-4">
+                                            <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow-sm" title="You (Team Lead)">
                                                 You
                                             </div>
                                             {registration.team_members.slice(0, 3).map((member, idx) => (
                                                 <div
                                                     key={idx}
-                                                    className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-xs font-bold border-2 border-white"
+                                                    className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-xs font-bold border-2 border-white shadow-sm"
                                                     title={member.name}
                                                 >
-                                                    {member.name?.charAt(0) || 'M'}
+                                                    {member.name?.charAt(0)?.toUpperCase() || 'M'}
                                                 </div>
                                             ))}
                                             {registration.team_members.length > 3 && (
-                                                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-bold border-2 border-white">
+                                                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-bold border-2 border-white shadow-sm" title={`${registration.team_members.length - 3} more members`}>
                                                     +{registration.team_members.length - 3}
                                                 </div>
                                             )}
@@ -188,14 +205,15 @@ export default function StudentMyEvents() {
                                     </div>
                                 )}
 
-                                {/* Action Button */}
-                                <div className="mt-4">
-                                    <a
-                                        href={isCoordinator ? `/coordinator/browse-events/${registration.event.id}` : `/student/events/${registration.event.id}`}
-                                        className="block w-full text-center px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium text-sm transition-colors"
+                                {/* Action Button - Always at bottom */}
+                                <div className={registration.team_members && registration.team_members.length > 0 ? '' : 'mt-auto pt-3'}>
+                                    <button
+                                        onClick={() => handleViewDetails(registration.event.id)}
+                                        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 font-medium text-sm transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                                     >
                                         View Event Details
-                                    </a>
+                                        <ArrowRight className="h-4 w-4" />
+                                    </button>
                                 </div>
                             </div>
                         </div>
