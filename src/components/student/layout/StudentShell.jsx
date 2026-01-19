@@ -26,7 +26,7 @@ export default function StudentShell() {
     const navigation = [
         { name: 'Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
         { name: 'Events', href: '/student/events', icon: Calendar },
-        { name: 'Live Events', href: '/student/live', icon: Activity },
+        { name: 'Updates', href: '/student/updates', icon: Activity },
         { name: 'My Events', href: '/student/my-events', icon: Trophy },
     ]
 

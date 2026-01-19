@@ -19,7 +19,7 @@ export default function CoordinatorShell() {
         { name: 'Manage Events', href: '/coordinator/events', icon: Calendar },
         { name: 'Analytics', href: '/coordinator/analytics', icon: BarChart3 },
         { name: 'Browse Events', href: '/coordinator/browse-events', icon: Calendar },
-        { name: 'Live Events', href: '/coordinator/live', icon: Activity },
+        { name: 'Updates', href: '/coordinator/updates', icon: Activity },
         { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
     ]
 

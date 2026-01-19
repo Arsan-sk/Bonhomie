@@ -944,7 +944,14 @@ export default function CoordinatorEventManage() {
                                                 >
                                                     <option value="">-- Select First Place Winner --</option>
                                                     {participants
-                                                        .filter(p => p.status === 'confirmed')
+                                                        .filter(p => {
+                                                            // For group events (max_team_size > 1), only show team leaders
+                                                            if (event.max_team_size > 1) {
+                                                                return p.status === 'confirmed' && p.team_members?.length > 0
+                                                            }
+                                                            // For individual events, show all confirmed participants
+                                                            return p.status === 'confirmed'
+                                                        })
                                                         .map(p => (
                                                             <option key={p.id} value={p.id}>
                                                                 {p.user?.full_name} ({p.user?.roll_number})
@@ -967,7 +974,14 @@ export default function CoordinatorEventManage() {
                                                 >
                                                     <option value="">-- Select Second Place Winner --</option>
                                                     {participants
-                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place)
+                                                        .filter(p => {
+                                                            // For group events (max_team_size > 1), only show team leaders
+                                                            if (event.max_team_size > 1) {
+                                                                return p.status === 'confirmed' && p.team_members?.length > 0 && p.id !== resultForm.first_place
+                                                            }
+                                                            // For individual events, show all confirmed participants except first place
+                                                            return p.status === 'confirmed' && p.id !== resultForm.first_place
+                                                        })
                                                         .map(p => (
                                                             <option key={p.id} value={p.id}>
                                                                 {p.user?.full_name} ({p.user?.roll_number})
@@ -990,7 +1004,15 @@ export default function CoordinatorEventManage() {
                                                 >
                                                     <option value="">-- Select Third Place Winner --</option>
                                                     {participants
-                                                        .filter(p => p.status === 'confirmed' && p.id !== resultForm.first_place && p.id !== resultForm.second_place)
+                                                        .filter(p => {
+                                                            // For group events (max_team_size > 1), only show team leaders
+                                                            if (event.max_team_size > 1) {
+                                                                return p.status === 'confirmed' && p.team_members?.length > 0 && 
+                                                                       p.id !== resultForm.first_place && p.id !== resultForm.second_place
+                                                            }
+                                                            // For individual events, show all confirmed participants except first and second
+                                                            return p.status === 'confirmed' && p.id !== resultForm.first_place && p.id !== resultForm.second_place
+                                                        })
                                                         .map(p => (
                                                             <option key={p.id} value={p.id}>
                                                                 {p.user?.full_name} ({p.user?.roll_number})

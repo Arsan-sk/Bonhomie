@@ -22,13 +22,14 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import CoordinatorRoute from './components/CoordinatorRoute'
 import StudentRoute from './components/StudentRoute'
+import PublicRoute from './components/auth/PublicRoute'
 
 // Student Imports
 import StudentShell from './components/student/layout/StudentShell'
 import StudentDashboard from './pages/student/StudentDashboard'
 import StudentEvents from './pages/student/StudentEvents'
 import StudentMyEvents from './pages/student/StudentMyEvents'
-import StudentLive from './pages/student/StudentLive'
+import StudentUpdates from './pages/student/StudentUpdates'
 
 // Admin Pages
 import AdminDashboard from './pages/dashboards/AdminDashboard'
@@ -44,6 +45,7 @@ import AdminNotifications from './pages/admin/AdminNotifications'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminCertificates from './pages/admin/AdminCertificates'
 import CertificateVerify from './pages/CertificateVerify'
+import NotFound from './pages/NotFound'
 import { AuthProvider } from './context/AuthContext'
 
 function App() {
@@ -53,13 +55,13 @@ function App() {
       <Routes>
         {/* Public & Student Routes wrapped in Main Layout */}
         <Route element={<Layout><Outlet /></Layout>}>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           <Route path="/verify" element={<CertificateVerify />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:id" element={<EventDetail />} />
           <Route path="/events/:id/register" element={<EventRegistration />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           <Route path="/profile" element={<Profile />} />
           {/* Redirect old dashboard path to new namespace */}
           <Route path="/dashboard" element={<Navigate to="/student/dashboard" replace />} />
@@ -77,7 +79,7 @@ function App() {
           <Route path="events/:id" element={<EventDetail />} />
           <Route path="events/:id/register" element={<EventRegistration />} />
           <Route path="my-events" element={<StudentMyEvents />} />
-          <Route path="live" element={<StudentLive />} />
+          <Route path="updates" element={<StudentUpdates />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
 
@@ -116,9 +118,12 @@ function App() {
           <Route path="browse-events" element={<StudentEvents baseUrl="/coordinator/browse-events" />} />
           <Route path="browse-events/:id" element={<EventDetail />} />
           <Route path="browse-events/:id/register" element={<EventRegistration />} />
-          <Route path="live" element={<StudentLive />} />
+          <Route path="updates" element={<StudentUpdates />} />
           <Route path="my-registrations" element={<StudentMyEvents />} />
         </Route>
+
+        {/* 404 Not Found - Catch all unmatched routes */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
   )
