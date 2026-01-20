@@ -21,8 +21,8 @@ export default function Incharge() {
             img: irfan
         },
         {
-            name: 'Shahin Khan',
-            role: 'Cultural, In-Charge',
+            name: 'Shahin Momin',
+            role: 'Cultural Co Ordinator',
             img: shahin
         }
     ]
