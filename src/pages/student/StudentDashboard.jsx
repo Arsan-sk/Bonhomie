@@ -90,8 +90,9 @@ export default function StudentDashboard() {
         return reg.event?.status === 'scheduled'
     })
 
+    // Fix: Check is_live boolean column instead of status
     const ongoingEvents = registrations.filter(reg => {
-        return reg.event?.status === 'live' || reg.event?.status === 'ongoing'
+        return reg.event?.is_live === true
     })
     if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
 
