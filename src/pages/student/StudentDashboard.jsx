@@ -13,6 +13,7 @@ export default function StudentDashboard() {
     const [certificates, setCertificates] = useState([])
     const [notifications, setNotifications] = useState([])
     const [totalEvents, setTotalEvents] = useState(0)
+    const [liveEventsCount, setLiveEventsCount] = useState(0) // NEW: Track total live events
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -21,6 +22,7 @@ export default function StudentDashboard() {
             fetchCertificates()
             fetchNotifications()
             fetchTotalEvents()
+            fetchLiveEventsCount() // NEW: Fetch live events count
         }
     }, [user])
 
@@ -85,15 +87,28 @@ export default function StudentDashboard() {
         }
     }
 
-    // Calculate stats
+    // NEW: Fetch count of live events
+    const fetchLiveEventsCount = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('events')
+                .select('id')
+                .eq('is_live', true)
+
+            if (error) throw error
+            const count = data?.length || 0
+            setLiveEventsCount(count)
+            console.log('🔴 Live Events Count:', count)
+        } catch (error) {
+            console.error('Error fetching live events count:', error)
+        }
+    }
+
+    // Calculate stats from user's registrations
     const upcomingEvents = registrations.filter(reg => {
         return reg.event?.status === 'scheduled'
     })
 
-    // Fix: Check is_live boolean column instead of status
-    const ongoingEvents = registrations.filter(reg => {
-        return reg.event?.is_live === true
-    })
     if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
 
     return (
@@ -175,7 +190,7 @@ export default function StudentDashboard() {
                         </div>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Live</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-gray-900">{ongoingEvents.length}</h3>
+                    <h3 className="text-3xl font-bold text-gray-900">{liveEventsCount}</h3>
                     <p className="text-sm text-gray-500 mt-1">Ongoing Events</p>
                 </div>
 
