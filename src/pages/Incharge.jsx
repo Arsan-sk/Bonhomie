@@ -7,12 +7,12 @@ export default function Incharge() {
     const faculty = [
         {
             name: 'Nusrath Junaidi',
-            role: 'COST, In-Charge',
+            role: 'CoST, In-Charge',
             img: nusrath
         },
         {
             name: 'Shabaz Haque',
-            role: 'COST, Advisor',
+            role: 'CoST, Advisor',
             img: shahbaz
         },
         {
