@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Menu, X, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import bonhomie_logo from '../../assets/bonhomie_logo.svg'
 import clsx from 'clsx'
 
 export default function Navbar() {
@@ -50,14 +51,17 @@ export default function Navbar() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex h-16 items-center justify-between">
 
-                    {/* Logo */}
-                    <Link to="/" className="flex items-center gap-3 group">
-                        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-white font-bold shadow-md transition-transform duration-300 group-hover:scale-110">
-                            B
-                        </div>
-                        <span className="text-xl font-extrabold tracking-tight text-primary transition-all duration-300 group-hover:tracking-wider">
-                            Bonhomie
-                        </span>
+                    {/* Logo Image */}
+                    <Link to="/" className="flex items-center group">
+                        <img
+                            src={bonhomie_logo}
+                            alt="Bonhomie Logo"
+                            className="
+                                h-14 sm:h-16 w-auto
+                                transition-transform duration-300 ease-out
+                                group-hover:scale-110
+                            "
+                        />
                     </Link>
 
                     {/* Desktop Nav */}
@@ -99,7 +103,7 @@ export default function Navbar() {
                                     Login
                                 </Link>
 
-                                {/* 🔥 Register Button with Fill Animation */}
+                                {/* Register Button */}
                                 <Link
                                     to="/register"
                                     className="relative overflow-hidden px-6 py-2 rounded-full
@@ -110,8 +114,6 @@ export default function Navbar() {
                                     <span className="relative z-10 group-hover:text-white transition-colors duration-300">
                                         Register
                                     </span>
-
-                                    {/* animated fill */}
                                     <span
                                         className="absolute inset-0 bg-primary
                                                    origin-bottom-left scale-0
