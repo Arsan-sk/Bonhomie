@@ -1,4 +1,5 @@
 import { Facebook, Instagram, Phone, Mail } from 'lucide-react'
+import { Link } from 'react-router-dom';
 
 export default function Footer() {
     return (
@@ -25,8 +26,8 @@ export default function Footer() {
                     <ul className="space-y-3 text-gray-300 text-sm">
                         {['Sports', 'Cultural', 'Technical'].map(item => (
                             <li key={item}>
-                                <a
-                                    href="#top"
+                                <Link
+                                    to="/events"
                                     className="inline-block relative
                                     after:absolute after:left-0 after:-bottom-0.5
                                     after:h-[1.5px] after:w-0 after:bg-white
@@ -34,7 +35,7 @@ export default function Footer() {
                                     hover:after:w-full hover:text-white transition"
                                 >
                                     {item}
-                                </a>
+                                </Link>
                             </li>
                         ))}
                     </ul>
@@ -67,15 +68,15 @@ export default function Footer() {
                     <div className="space-y-3 text-gray-300 text-sm">
                         <div className="flex items-center gap-3">
                             <Mail size={16} />
-                            bonhomie@gmail.com
+                            23ec23@aiktc.ac.in 23ds33@aiktc.ac.in
                         </div>
                         <div className="flex items-center gap-3">
                             <Phone size={16} />
-                            +91 87675 25655
+                            +91 93263 83639
                         </div>
                         <div className="flex items-center gap-3">
                             <Phone size={16} />
-                            +91 81047 71326
+                            +91 74000 48628
                         </div>
                     </div>
                 </div>
@@ -105,15 +106,15 @@ export default function Footer() {
                     <div className="flex items-center gap-4">
 
                         {/* Facebook */}
-                        <a className="group relative w-10 h-10 rounded-full border border-white/30
+                        <Link to="https://www.facebook.com/aiktcofficial/" target="_blank" rel="noopener noreferrer" className="group relative w-10 h-10 rounded-full border border-white/30
                                        flex items-center justify-center overflow-hidden">
                             <span className="absolute inset-0 bg-blue-600 scale-0 group-hover:scale-100
                                              transition-transform duration-300 rounded-full" />
                             <Facebook className="relative z-10 text-white" size={18} />
-                        </a>
+                        </Link>
 
                         {/* WhatsApp (RESTORED ICON) */}
-                        <a className="group relative w-10 h-10 rounded-full border border-white/30
+                        <Link to="https://chat.whatsapp.com/IfOGcKECmzjEIa5nW0oTuU" target="_blank" className="group relative w-10 h-10 rounded-full border border-white/30
                                        flex items-center justify-center overflow-hidden">
                             <span className="absolute inset-0 bg-green-500 scale-0 group-hover:scale-100
                                              transition-transform duration-300 rounded-full" />
@@ -125,15 +126,15 @@ export default function Footer() {
                             >
                                 <path d="M12.04 2.01c-5.5 0-9.98 4.48-9.98 9.98 0 1.76.46 3.48 1.34 5.02L2 22l5.11-1.33a9.93 9.93 0 0 0 4.93 1.3h.01c5.5 0 9.98-4.48 9.98-9.98s-4.48-9.98-9.99-9.98zm5.79 14.54c-.24.67-1.4 1.27-1.92 1.35-.52.09-1.17.13-1.89-.12-.43-.14-.98-.32-1.69-.63-2.97-1.29-4.9-4.25-5.05-4.45-.15-.2-1.21-1.61-1.21-3.07s.77-2.17 1.04-2.47c.27-.3.6-.37.8-.37h.58c.19 0 .44-.07.69.53.25.6.85 2.07.92 2.22.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.18-.32.4-.45.54-.15.15-.3.31-.13.61.17.3.76 1.25 1.64 2.03 1.13.99 2.08 1.3 2.38 1.45.3.15.47.13.65-.08.18-.21.75-.88.95-1.18.2-.3.4-.25.67-.15.27.1 1.71.81 2.01.96.3.15.5.22.57.35.07.13.07.75-.17 1.42z" />
                             </svg>
-                        </a>
+                        </Link>
 
                         {/* Instagram */}
-                        <a className="group relative w-10 h-10 rounded-full border border-white/30
+                        <Link to="https://www.instagram.com/bonhomie_aiktc/" target="_blank" rel="noopener noreferrer" className="group relative w-10 h-10 rounded-full border border-white/30
                                        flex items-center justify-center overflow-hidden">
                             <span className="absolute inset-0 bg-pink-500 scale-0 group-hover:scale-100
                                              transition-transform duration-300 rounded-full" />
                             <Instagram className="relative z-10 text-white" size={18} />
-                        </a>
+                        </Link>
 
                     </div>
                 </div>
