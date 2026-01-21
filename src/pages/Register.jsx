@@ -32,8 +32,8 @@ const registerSchema = z
         email: z
             .string()
             .email("Invalid email address")
-            .refine(email => email.endsWith("@aiktc.ac.in") || email.endsWith("@bonhomie.com"), {
-                message: "Email must be from @aiktc.ac.in or @bonhomie.com domain",
+            .refine(email => email.endsWith("@aiktc.ac.in") || email.endsWith("@gmail.com"), {
+                message: "Email must be from @aiktc.ac.in or @gmail.com domain",
             }),
         password: z.string().min(6, "Password must be at least 6 characters"),
         confirmPassword: z.string(),
