@@ -160,7 +160,7 @@ export default function Register() {
             } else if (errorText.includes("email") && (errorText.includes("already registered") || errorText.includes("already exists"))) {
                 errorMessage = "❌ This email is already registered. Please login instead or use a different email.";
             } else if (errorText.includes("invalid email domain")) {
-                errorMessage = "❌ Invalid email domain. Only @aiktc.ac.in and @bonhomie.com emails are allowed.";
+                errorMessage = "❌ Invalid email domain. Only @aiktc.ac.in, @bonhomie.com, and @gmail.com emails are allowed.";
             } else if (errorText.includes("missing required information")) {
                 errorMessage = "❌ Please fill in all required fields and try again.";
             }

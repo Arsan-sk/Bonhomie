@@ -5,6 +5,7 @@ import {
     generateIndividualParticipantsCSV,
     generateTeamParticipantsCSV,
     generatePaymentCSV,
+    generateNBACSV,
     arrayToCSV,
     downloadCSV,
     getFormattedDate
@@ -332,6 +333,32 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
         }
     }
 
+    const handleExportNBA = async () => {
+        setIsExporting(true)
+        try {
+            // Fetch all registrations with full details (no event filter for NBA report)
+            const { data, error } = await supabase
+                .from('registrations')
+                .select(`
+                    id,
+                    status,
+                    team_members,
+                    event:events(id, name, category, subcategory)
+                `)
+
+            if (error) throw error
+
+            // Generate NBA CSV (works with empty data too - shows structure)
+            const csv = generateNBACSV(data || [])
+            downloadCSV(csv, `NBA_Bonomy_2026_${getFormattedDate()}.csv`)
+        } catch (error) {
+            console.error('Error exporting NBA report:', error)
+            alert('Failed to export NBA report')
+        } finally {
+            setIsExporting(false)
+        }
+    }
+
     return (
         <div className="max-w-7xl mx-auto">
             {/* Header with Event Selector */}
@@ -361,10 +388,17 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                         >
                             <option value="individual">Individual Events</option>
                             <option value="group">Group Events</option>
+                            <option value="nba">NBA</option>
                         </select>
                     )}
                     <button
-                        onClick={activeTab === 'participation' ? handleExportParticipants : handleExportPayments}
+                        onClick={() => {
+                            if (activeTab === 'participation') {
+                                exportType === 'nba' ? handleExportNBA() : handleExportParticipants()
+                            } else {
+                                handleExportPayments()
+                            }
+                        }}
                         disabled={isExporting}
                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm"
                     >

@@ -382,3 +382,137 @@ export function generatePaymentCSV(registrations) {
 
     return data
 }
+
+/**
+ * Generate NBA Bonomy 2026 Report CSV
+ * Creates a comprehensive report with Cultural, Sports, Technical sections and NBA Requirements summary
+ */
+export function generateNBACSV(registrations) {
+    const rows = []
+    
+    // Helper to add a row
+    const addRow = (...cells) => {
+        rows.push(cells.map(c => escapeCSVField(c || '')).join(','))
+    }
+    
+    // Process each category
+    const categories = ['Cultural', 'Sports', 'Technical']
+    const categoryStats = {}
+    
+    categories.forEach(categoryName => {
+        // Filter registrations for this category
+        const categoryRegs = registrations.filter(reg => reg.event?.category === categoryName)
+        
+        // Separate Individual (Solo) and Group (Teams)
+        const soloRegs = categoryRegs.filter(reg => reg.event?.subcategory === 'Individual')
+        const teamRegs = categoryRegs.filter(reg => reg.event?.subcategory === 'Group')
+        
+        // Get unique events
+        const soloEvents = new Set(soloRegs.map(reg => reg.event?.id).filter(Boolean))
+        const teamEvents = new Set(teamRegs.map(reg => reg.event?.id).filter(Boolean))
+        
+        // Count registered vs actual participation
+        const soloRegistered = soloRegs.length
+        const soloActual = soloRegs.filter(reg => reg.status === 'confirmed').length
+        
+        const teamCount = teamRegs.length // Number of teams (team leaders)
+        
+        // Count participants in teams (team leader + team members)
+        let teamParticipants = 0
+        teamRegs.forEach(reg => {
+            teamParticipants += 1 // Team leader
+            if (reg.team_members && Array.isArray(reg.team_members)) {
+                teamParticipants += reg.team_members.length
+            }
+        })
+        
+        // Store stats for NBA Requirements section
+        categoryStats[categoryName] = {
+            soloEvents: soloEvents.size,
+            teamEvents: teamEvents.size,
+            totalEvents: soloEvents.size + teamEvents.size,
+            soloRegistered,
+            soloActual,
+            teamCount,
+            teamParticipants,
+            totalParticipants: soloActual + teamParticipants
+        }
+        
+        // Calculate totals for this category
+        const totalParticipationTeamWise = `${soloEvents.size}+${teamEvents.size}=${soloEvents.size + teamEvents.size}`
+        const totalParticipants = `${soloActual}+${teamParticipants}=${soloActual + teamParticipants}`
+        
+        // === BUILD CATEGORY SECTION ===
+        
+        // Category Header (spanning all columns)
+        addRow(categoryName.toUpperCase())
+        
+        // Empty row
+        addRow()
+        
+        // SOLO Section
+        addRow('SR NO', 'SOLO', '', '', '')
+        addRow('', '', 'REGISTERED', 'ACTUAL PARTICIPATION', '')
+        addRow('1', 'EVENTS', soloEvents.size, soloEvents.size, '')
+        addRow('2', 'PARTICIPANTS', soloRegistered, soloActual, '')
+        
+        // Empty row
+        addRow()
+        
+        // TEAMS Section
+        addRow('SR NO', 'TEAMS', '', '', '')
+        addRow('1', 'EVENTS', teamEvents.size, '', '')
+        addRow('2', 'TEAMS', teamCount, '', '')
+        addRow('3', 'PARTICIPANTS IN THE TEAMS', teamParticipants, '', '')
+        
+        // Totals
+        addRow('TOTAL PARTICIPATION TEAM/', totalParticipationTeamWise, '', '', '')
+        addRow('TOTAL PARTICIPANTS', totalParticipants, '', '', '')
+        
+        // Empty rows between categories
+        addRow()
+        addRow()
+    })
+    
+    // === NBA REQUIREMENTS SECTION ===
+    addRow('NBA REQUIREMENTS')
+    addRow()
+    
+    // Headers
+    addRow('SR NO', 'EVENT', 'NO OF EVENT', 'NO OF TEAMS', 'PARTICIPANTS', 'Registered')
+    
+    // Calculate totals
+    let totalEvents = 0
+    let totalTeams = 0
+    let totalParticipants = 0
+    
+    // Add rows for each category
+    let srNo = 1
+    categories.forEach(categoryName => {
+        const stats = categoryStats[categoryName]
+        totalEvents += stats.totalEvents
+        totalTeams += stats.teamCount
+        totalParticipants += stats.totalParticipants
+        
+        addRow(
+            srNo++,
+            categoryName.toUpperCase(),
+            stats.totalEvents,
+            stats.teamCount,
+            stats.totalParticipants,
+            'Registered'
+        )
+    })
+    
+    // Total row
+    addRow(
+        srNo,
+        'TOTAL',
+        totalEvents,
+        totalTeams,
+        totalParticipants,
+        totalParticipants
+    )
+    
+    return rows.join('\n')
+}
