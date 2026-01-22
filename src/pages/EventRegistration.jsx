@@ -409,7 +409,7 @@ export default function EventRegistration() {
                   Pay to UPI ID:
                   <a
                     href={`upi://pay?pa=${event.upi_id || "bonhomei@upi"}&pn=${encodeURIComponent("Event Registration")}&am=${event.fee}&tn=${encodeURIComponent(`Registration for ${event.name}`)}&cu=INR`}
-                    className="font-mono bg-gray-100 hover:bg-gray-200 text-indigo-800 px-2 py-0.5 rounded transition-all cursor-pointer underline decoration-dotted"
+                    className="font-mono text-blue-600 px-1 rounded transition-all cursor-pointer underline decoration-solid decoration-2 underline-offset-4 hover:text-blue-800 hover:bg-blue-50"
                     title="Click to open in UPI app"
                   >
                     {event.upi_id || "bonhomei@upi"}
