@@ -11,7 +11,8 @@ export default function SmartTable({
     actions,
     selectable = false,
     selectedIds = [],
-    onSelectionChange
+    onSelectionChange,
+    customFilters // NEW: Support for custom filter UI
 }) {
     const [sortConfig, setSortConfig] = useState(null)
 
@@ -53,7 +54,7 @@ export default function SmartTable({
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             {/* Header / Actions */}
-            {(searchable || actions) && (
+            {(searchable || actions || customFilters) && (
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
                     {searchable && (
                         <div className="relative max-w-sm flex-1">
@@ -68,6 +69,7 @@ export default function SmartTable({
                             />
                         </div>
                     )}
+                    {customFilters && <div className="flex items-center gap-3">{customFilters}</div>}
                     {actions && <div className="flex gap-2">{actions}</div>}
                 </div>
             )}

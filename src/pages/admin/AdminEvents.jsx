@@ -9,6 +9,7 @@ export default function AdminEvents() {
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
+    const [categoryFilter, setCategoryFilter] = useState('all') // NEW: Category filter
 
     // Modal State
     const [isEventFormOpen, setIsEventFormOpen] = useState(false)
@@ -278,7 +279,12 @@ export default function AdminEvents() {
         }
     ]
 
-    const filteredEvents = events.filter(ev => ev.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+    // Filter events by search query AND category
+    const filteredEvents = events.filter(ev => {
+        const matchesSearch = ev.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesCategory = categoryFilter === 'all' || ev.category === categoryFilter
+        return matchesSearch && matchesCategory
+    })
 
     return (
         <div className="space-y-8 pb-10">
@@ -302,7 +308,22 @@ export default function AdminEvents() {
                     loading={loading}
                     searchable={true}
                     onSearchChange={setSearchQuery}
-                    emptyMessage="No events found."
+
+                    customFilters={
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-700">Category:</label>
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                                <option value="all">All Categories</option>
+                                <option value="Cultural">Cultural</option>
+                                <option value="Technical">Technical</option>
+                                <option value="Sports">Sports</option>
+                            </select>
+                        </div>
+                    }
                 />
             </div>
 
