@@ -391,19 +391,32 @@ export default function EventRegistration() {
               <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100">
                 <h4 className="text-sm font-medium text-indigo-800 mb-2">Payment Details</h4>
 
-                {/* QR Code Display with Persistent Download Button */}
+                {/* QR Code Display with Force Download Button */}
                 {event.qr_code_path && (
                   <div className="flex justify-center mb-4">
                     <div className="relative">
-                      {/* Persistent Download Button */}
                       <button
-                        onClick={() => {
-                          const link = document.createElement("a");
-                          link.href = event.qr_code_path;
-                          link.download = `QR_${event.name || "Payment"}.jpg`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
+                        onClick={async () => {
+                          try {
+                            // Fetch the image as a blob to bypass browser "open in tab" behavior
+                            const response = await fetch(event.qr_code_path);
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `QR_${event.name || "Payment"}.jpg`;
+                            document.body.appendChild(link);
+                            link.click();
+
+                            // Cleanup
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(url);
+                          } catch (error) {
+                            console.error("Download failed:", error);
+                            // Fallback: try opening in new tab if blob fetch fails
+                            window.open(event.qr_code_path, "_blank");
+                          }
                         }}
                         className="absolute top-2 right-2 bg-white p-1.5 rounded-full shadow-md z-10 transition-all hover:bg-gray-100 active:scale-95"
                         title="Download QR Code"
@@ -423,7 +436,6 @@ export default function EventRegistration() {
                         </svg>
                       </button>
 
-                      {/* QR Image */}
                       <img
                         src={event.qr_code_path}
                         alt="Payment QR Code"
@@ -438,7 +450,6 @@ export default function EventRegistration() {
                 </p>
               </div>
             )}
-
             {/* Transaction ID - Only for hybrid */}
             {paymentMode === "hybrid" && (
               <div>
