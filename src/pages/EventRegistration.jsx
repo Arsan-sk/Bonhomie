@@ -562,7 +562,8 @@ export default function EventRegistration() {
                 )}
 
                 <p className="mt-2 text-xs text-gray-500">
-                  Team Size: {event.min_team_size} - {event.max_team_size} members (including you).
+                  Team Size: {event.min_team_size} - {event.max_team_size} members (You are already
+                  included).
                 </p>
               </div>
             )}
