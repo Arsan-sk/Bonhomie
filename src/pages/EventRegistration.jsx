@@ -391,29 +391,50 @@ export default function EventRegistration() {
               <div className="bg-indigo-50 p-4 rounded-md border border-indigo-100">
                 <h4 className="text-sm font-medium text-indigo-800 mb-2">Payment Details</h4>
 
-                {/* QR Code Display */}
+                {/* QR Code Display with Persistent Download Button */}
                 {event.qr_code_path && (
                   <div className="flex justify-center mb-4">
-                    <img
-                      src={event.qr_code_path}
-                      alt="Payment QR Code"
-                      className="w-48 h-48 object-contain border-2 border-blue-200 rounded-lg shadow-sm bg-white"
-                    />
+                    <div className="relative">
+                      {/* Persistent Download Button */}
+                      <button
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = event.qr_code_path;
+                          link.download = `QR_${event.name || "Payment"}.jpg`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="absolute top-2 right-2 bg-white p-1.5 rounded-full shadow-md z-10 transition-all hover:bg-gray-100 active:scale-95"
+                        title="Download QR Code"
+                      >
+                        <svg
+                          className="w-5 h-5 text-indigo-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                      </button>
+
+                      {/* QR Image */}
+                      <img
+                        src={event.qr_code_path}
+                        alt="Payment QR Code"
+                        className="w-48 h-48 object-contain border-2 border-blue-200 rounded-lg shadow-sm bg-white"
+                      />
+                    </div>
                   </div>
                 )}
 
                 <p className="text-sm text-indigo-700">
                   Registration Fee: <strong className="text-lg">₹{event.fee}</strong>
-                </p>
-                <p className="text-sm text-indigo-700 mt-1">
-                  Pay to UPI ID:
-                  <a
-                    href={`upi://pay?pa=${event.upi_id || "bonhomei@upi"}&pn=${encodeURIComponent(event.event_name || "Event")}&am=${event.fee}&cu=INR`}
-                    className="font-mono bg-gray-100 hover:bg-gray-200 text-indigo-800 px-2 py-0.5 rounded transition-all cursor-pointer underline decoration-dotted"
-                    title="Click to open in UPI app"
-                  >
-                    {event.upi_id || "bonhomei@upi"}
-                  </a>
                 </p>
               </div>
             )}
