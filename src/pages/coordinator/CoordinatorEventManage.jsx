@@ -39,6 +39,11 @@ export default function CoordinatorEventManage() {
     const [screenshotModal, setScreenshotModal] = useState({ isOpen: false, url: '' })
     const [selectedProfile, setSelectedProfile] = useState(null) // For viewing participant profile
     const [bannerImageError, setBannerImageError] = useState(false)
+    
+    // Replace Member State
+    const [replaceModal, setReplaceModal] = useState({ isOpen: false, memberId: null, memberName: '' })
+    const [replaceRollNumber, setReplaceRollNumber] = useState('')
+    const [isReplacing, setIsReplacing] = useState(false)
 
     useEffect(() => {
         fetchEventDetails()
@@ -744,6 +749,25 @@ export default function CoordinatorEventManage() {
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="text-lg font-bold text-gray-900">Participants</h3><p className="text-sm text-gray-500">Manage individuals and teams.</p></div>
                                 <div className="flex gap-2">
+                                    {/* Search Input */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by roll number..."
+                                            value={participantSearch}
+                                            onChange={(e) => setParticipantSearch(e.target.value)}
+                                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-64"
+                                        />
+                                        {participantSearch && (
+                                            <button
+                                                onClick={() => setParticipantSearch('')}
+                                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                <XIcon className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
                                     {/* Members Only Toggle (Group Events Only) */}
                                     {event?.subcategory?.toLowerCase() === 'group' && (
                                         <button
@@ -790,6 +814,25 @@ export default function CoordinatorEventManage() {
                                         } else {
                                             // Individual events: show all confirmed
                                             displayParticipants = participants.filter(p => p.status === 'confirmed');
+                                        }
+
+                                        // Apply search filter if search query exists
+                                        if (participantSearch.trim()) {
+                                            const searchTerm = participantSearch.trim().toLowerCase();
+                                            displayParticipants = displayParticipants.filter(p => 
+                                                p.user?.roll_number?.toLowerCase().includes(searchTerm)
+                                            );
+                                        }
+
+                                        // Show "No results found" message if filtered list is empty
+                                        if (displayParticipants.length === 0 && participantSearch.trim()) {
+                                            return (
+                                                <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed">
+                                                    <Search className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                                                    <p className="text-gray-500 font-medium">No search results found</p>
+                                                    <p className="text-gray-400 text-sm mt-1">No participant with roll number "{participantSearch}"</p>
+                                                </div>
+                                            );
                                         }
 
                                         return displayParticipants.map((participant) => {
@@ -839,45 +882,77 @@ export default function CoordinatorEventManage() {
                                                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${participant.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{participant.status}</span>
                                                         </div>
 
-                                                        {/* Reject Button */}
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (isLeader && !showMembersOnly) {
-                                                                    // Bulk reject team
-                                                                    if (!confirm(`Reject entire team? This will reject the leader and all ${participant.team_members.length} team members.`)) return;
+                                                        {/* Action Buttons */}
+                                                        <div className="flex items-center gap-2 ml-4">
+                                                            {/* Replace Button (Members Only) */}
+                                                            {showMembersOnly && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setReplaceModal({
+                                                                            isOpen: true,
+                                                                            memberId: participant.id,
+                                                                            memberName: participant.user?.full_name || 'Unknown'
+                                                                        })
+                                                                    }}
+                                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2"
+                                                                    title="Replace Member"
+                                                                >
+                                                                    <User className="h-4 w-4" />
+                                                                    Replace
+                                                                </button>
+                                                            )}
 
-                                                                    try {
-                                                                        // Get member profile IDs
-                                                                        const memberProfileIds = participant.team_members.map(m => m.id);
+                                                            {/* Delete Button (Members Only) */}
+                                                            {showMembersOnly && (
+                                                                <button
+                                                                    onClick={() => handleDeleteMember(participant.id, participant.user?.full_name || 'Unknown')}
+                                                                    className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                                                                    title="Delete Member"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            )}
 
-                                                                        // Reject all team members
-                                                                        const { error: memberError } = await supabase
-                                                                            .from('registrations')
-                                                                            .update({ status: 'rejected' })
-                                                                            .eq('event_id', id)
-                                                                            .in('profile_id', memberProfileIds);
+                                                            {/* Reject Button */}
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (isLeader && !showMembersOnly) {
+                                                                        // Bulk reject team
+                                                                        if (!confirm(`Reject entire team? This will reject the leader and all ${participant.team_members.length} team members.`)) return;
 
-                                                                        if (memberError) {
-                                                                            console.error('Error rejecting team members:', memberError);
-                                                                            alert('Error rejecting team members');
-                                                                            return;
+                                                                        try {
+                                                                            // Get member profile IDs
+                                                                            const memberProfileIds = participant.team_members.map(m => m.id);
+
+                                                                            // Reject all team members
+                                                                            const { error: memberError } = await supabase
+                                                                                .from('registrations')
+                                                                                .update({ status: 'rejected' })
+                                                                                .eq('event_id', id)
+                                                                                .in('profile_id', memberProfileIds);
+
+                                                                            if (memberError) {
+                                                                                console.error('Error rejecting team members:', memberError);
+                                                                                alert('Error rejecting team members');
+                                                                                return;
+                                                                            }
+
+                                                                            // Reject leader
+                                                                            await handleRejectParticipant(participant.id);
+                                                                        } catch (error) {
+                                                                            console.error('Bulk reject error:', error);
+                                                                            alert('Error rejecting team');
                                                                         }
-
-                                                                        // Reject leader
-                                                                        await handleRejectParticipant(participant.id);
-                                                                    } catch (error) {
-                                                                        console.error('Bulk reject error:', error);
-                                                                        alert('Error rejecting team');
+                                                                    } else {
+                                                                        // Individual participant/member
+                                                                        handleRejectParticipant(participant.id);
                                                                     }
-                                                                } else {
-                                                                    // Individual participant/member
-                                                                    handleRejectParticipant(participant.id);
-                                                                }
-                                                            }}
-                                                            className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
-                                                        >
-                                                            {isLeader && !showMembersOnly ? 'Reject Team' : 'Reject'}
-                                                        </button>
+                                                                }}
+                                                                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
+                                                            >
+                                                                {isLeader && !showMembersOnly ? 'Reject Team' : 'Reject'}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     {!showMembersOnly && isLeader && (
                                                         <div className={`transition-all duration-300 ${isExpanded ? 'max-h-96' : 'max-h-0'} overflow-hidden`}>
@@ -1828,6 +1903,54 @@ export default function CoordinatorEventManage() {
                 cancelText={confirmDialog.cancelText}
                 showCancel={confirmDialog.showCancel}
             />
+
+            {/* Replace Member Modal */}
+            {replaceModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => {
+                    setReplaceModal({ isOpen: false, memberId: null, memberName: '' })
+                    setReplaceRollNumber('')
+                }}>
+                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Replace Member</h3>
+                        <p className="text-gray-600 mb-4">
+                            Replacing: <span className="font-semibold text-gray-800">{replaceModal.memberName}</span>
+                        </p>
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Enter New Member's Roll Number
+                            </label>
+                            <input
+                                type="text"
+                                value={replaceRollNumber}
+                                onChange={(e) => setReplaceRollNumber(e.target.value)}
+                                placeholder="e.g., 2021BCS001"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                autoFocus
+                                disabled={isReplacing}
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleReplaceMember}
+                                disabled={isReplacing}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            >
+                                {isReplacing ? 'Replacing...' : 'Replace'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setReplaceModal({ isOpen: false, memberId: null, memberName: '' })
+                                    setReplaceRollNumber('')
+                                }}
+                                disabled={isReplacing}
+                                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
