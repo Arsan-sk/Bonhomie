@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Calendar, Users, Trophy } from "lucide-react";
-import bonhomieVideo from "../assets/bonhomie2k19.mp4";
+import bonhomieVideo from "../assets/bh_background.mp4";
 import EventsSection from "../pages/EventsSection.jsx";
 import GlimpsesSection from "../pages/GlimpsesSection.jsx";
 import Incharge from "../pages/Incharge.jsx";
@@ -66,13 +66,14 @@ export default function Landing() {
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Link
                 to="/events"
-                className="rounded-md bg-primary px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                className="text-sm font-semibold leading-6 text-white"
               >
                 Explore Events
               </Link>
               <Link
                 to="/register"
-                className="text-sm font-semibold leading-6 text-white"
+                
+                className="rounded-md bg-primary px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
                 Register Now <span aria-hidden="true">→</span>
               </Link>
