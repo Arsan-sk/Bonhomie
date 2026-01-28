@@ -25,6 +25,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     genderBreakdown: { male: 0, female: 0, other: 0 },
     departmentBreakdown: {},
     eventPopularity: [],
+    statusBreakdown: { confirmed: 0, pending: 0, rejected: 0 },
   });
 
   // Payment Stats
@@ -56,45 +57,63 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     try {
       setLoading(true);
 
-      // 1. Create a base query helper to avoid repeating code
-      const getCountByStatus = (status = null) => {
+      // 1. Helper for exact counts (Status Breakdown)
+      const getCountByStatus = async (status = null) => {
         let q = supabase.from("registrations").select("id", { count: "exact", head: true });
         if (selectedEvent) q = q.eq("event_id", selectedEvent);
         if (status) q = q.eq("status", status);
-        return q;
+        const { count } = await q;
+        return count || 0;
       };
 
-      // 2. Fetch all counts in parallel (very fast)
-      const [totalRes, confirmedRes, pendingRes, rejectedRes] = await Promise.all([
+      // Fetch all status counts in parallel
+      const [total, confirmed, pending, rejected] = await Promise.all([
         getCountByStatus(),
         getCountByStatus("confirmed"),
         getCountByStatus("pending"),
         getCountByStatus("rejected"),
       ]);
 
-      // 3. Fetch data ONLY for charts (Gender/Dept/Popularity)
-      // Note: If you have >1000 users, these specific charts will only represent the first 1000
-      // unless you use the "Recursive Fetch" method mentioned before.
-      let dataQuery = supabase
-        .from("registrations")
-        .select(
+      // 2. Recursive fetch to get ALL data for Gender/Dept charts (Bypasses 1000 limit)
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase
+          .from("registrations")
+          .select(
+            `
+            id,
+            profile:profiles(gender, department),
+            event:events(id, name)
           `
-          id,
-          profile:profiles(gender, department),
-          event:events(id, name)
-      `
-        )
-        .limit(1000);
+          )
+          .range(from, from + step - 1);
 
-      if (selectedEvent) dataQuery = dataQuery.eq("event_id", selectedEvent);
-      const { data } = await dataQuery;
+        if (selectedEvent) query = query.eq("event_id", selectedEvent);
 
-      // 4. Calculate Chart Breakdowns (Gender/Dept)
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += step;
+        } else {
+          hasMore = false;
+        }
+
+        // Safety break to prevent infinite loops if something goes wrong
+        if (allData.length >= 10000) hasMore = false;
+      }
+
+      // 3. Calculate Chart Breakdowns on the COMPLETE data set
       const genderBreakdown = { male: 0, female: 0, other: 0 };
       const departmentBreakdown = {};
       const eventCounts = {};
 
-      data?.forEach(reg => {
+      allData.forEach(reg => {
         const gender = reg.profile?.gender?.toLowerCase() || "other";
         genderBreakdown[gender] = (genderBreakdown[gender] || 0) + 1;
 
@@ -106,14 +125,9 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
         }
       });
 
-      // 5. Update State with EXACT counts from database
       setStats({
-        totalRegistrations: totalRes.count || 0,
-        statusBreakdown: {
-          confirmed: confirmedRes.count || 0,
-          pending: pendingRes.count || 0,
-          rejected: rejectedRes.count || 0,
-        },
+        totalRegistrations: total,
+        statusBreakdown: { confirmed, pending, rejected },
         genderBreakdown,
         departmentBreakdown,
         eventPopularity: Object.entries(eventCounts)
@@ -130,66 +144,67 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
 
   const fetchPaymentStats = async () => {
     try {
-      let query = supabase
-        .from("registrations")
-        .select(
+      // For revenue, we also fetch all records to ensure nothing is missed
+      let allData = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase
+          .from("registrations")
+          .select(
+            `
+            id,
+            profile_id,
+            payment_mode,
+            team_members,
+            transaction_id,
+            payment_screenshot_path,
+            event:events(id, name, fee)
           `
-                    id,
-                    profile_id,
-                    payment_mode,
-                    team_members,
-                    transaction_id,
-                    payment_screenshot_path,
-                    event:events(id, name, fee)
-                `
-        )
-        .eq("status", "confirmed"); // Only count confirmed payments
+          )
+          .eq("status", "confirmed")
+          .range(from, from + 999);
 
-      if (selectedEvent) {
-        query = query.eq("event_id", selectedEvent);
+        if (selectedEvent) query = query.eq("event_id", selectedEvent);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += 1000;
+        } else {
+          hasMore = false;
+        }
       }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
 
       let totalRevenue = 0;
       const paymentModeBreakdown = { cash: 0, hybrid: 0, online: 0 };
       const eventRevenue = {};
 
-      data?.forEach(reg => {
-        // 🔥 CRITICAL FIX: Check team membership ONLY within the same event!
-        // Previous bug: searched ALL events, so solo participant in Event B
-        // was skipped if they happened to be in a team in Event A
-
+      allData.forEach(reg => {
         const isLeader = reg.team_members && reg.team_members.length > 0;
-
-        // Check if this registration is a team member by searching ONLY within same event
         let isTeamMember = false;
+
         if (!isLeader && reg.profile_id && reg.event?.id) {
-          // Search ONLY registrations in the SAME event
-          isTeamMember = data.some(
+          isTeamMember = allData.some(
             otherReg =>
-              otherReg.event?.id === reg.event.id && // SAME EVENT ONLY!
+              otherReg.event?.id === reg.event.id &&
               otherReg.team_members &&
               otherReg.team_members.length > 0 &&
               otherReg.team_members.some(member => member.id === reg.profile_id)
           );
         }
 
-        // Skip team members - they don't contribute to revenue (leader pays for all)
-        if (isTeamMember) {
-          return;
-        }
+        if (isTeamMember) return;
 
         const fee = reg.event?.fee || 0;
         totalRevenue += fee;
 
-        // Payment mode
         const mode = reg.payment_mode || "hybrid";
         paymentModeBreakdown[mode] = (paymentModeBreakdown[mode] || 0) + fee;
 
-        // Event revenue
         if (reg.event) {
           const eventName = reg.event.name;
           eventRevenue[eventName] = (eventRevenue[eventName] || 0) + fee;
@@ -212,33 +227,41 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const handleExportParticipants = async () => {
     setIsExporting(true);
     try {
-      // Fetch all registrations with full details
-      let query = supabase
-        .from("registrations")
-        .select(
-          `
-                    id,
-                    status,
-                    team_members,
-                    profile:profiles(full_name, roll_number, college_email, school, department, year_of_study, gender, phone),
-                    event:events(id, name, category, subcategory)
-                `
-        )
-        .eq("status", "confirmed");
+      let allExportData = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (selectedEvent) {
-        query = query.eq("event_id", selectedEvent);
+      while (hasMore) {
+        let query = supabase
+          .from("registrations")
+          .select(
+            `
+            id,
+            status,
+            team_members,
+            profile:profiles(full_name, roll_number, college_email, school, department, year_of_study, gender, phone),
+            event:events(id, name, category, subcategory)
+          `
+          )
+          .eq("status", "confirmed")
+          .range(from, from + 999);
+
+        if (selectedEvent) query = query.eq("event_id", selectedEvent);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allExportData = [...allExportData, ...data];
+          from += 1000;
+        } else {
+          hasMore = false;
+        }
       }
 
-      const { data, error } = await query;
+      const individual = allExportData.filter(reg => reg.event?.subcategory === "Individual");
+      const team = allExportData.filter(reg => reg.event?.subcategory === "Group");
 
-      if (error) throw error;
-
-      // Separate individual and team events
-      const individual = data.filter(reg => reg.event?.subcategory === "Individual");
-      const team = data.filter(reg => reg.event?.subcategory === "Group");
-
-      // Export based on selected type
       if (exportType === "individual") {
         if (individual.length > 0) {
           const individualData = generateIndividualParticipantsCSV(individual);
@@ -262,7 +285,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             : "all_events";
           downloadCSV(csv, `participants_individual_${eventName}_${getFormattedDate()}.csv`);
         } else {
-          alert("No individual event participant data available to export");
+          alert("No individual event participant data available");
         }
       } else if (exportType === "group") {
         if (team.length > 0) {
@@ -288,7 +311,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             : "all_events";
           downloadCSV(csv, `participants_group_${eventName}_${getFormattedDate()}.csv`);
         } else {
-          alert("No group event participant data available to export");
+          alert("No group event participant data available");
         }
       }
     } catch (error) {
@@ -302,38 +325,41 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const handleExportPayments = async () => {
     setIsExporting(true);
     try {
-      let query = supabase
-        .from("registrations")
-        .select(
-          `
-                    id,
-                    status,
-                    transaction_id,
-                    payment_mode,
-                    team_members,
-                    registered_at,
-                    profile_id,
-                    event_id,
-                    profile:profiles(full_name),
-                    event:events(id, name, fee)
-                `
-        )
-        .eq("status", "confirmed");
+      let allPaymentData = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (selectedEvent) {
-        query = query.eq("event_id", selectedEvent);
+      while (hasMore) {
+        let query = supabase
+          .from("registrations")
+          .select(
+            `
+            id, status, transaction_id, payment_mode, team_members, registered_at,
+            profile_id, event_id, profile:profiles(full_name), event:events(id, name, fee)
+          `
+          )
+          .eq("status", "confirmed")
+          .range(from, from + 999);
+
+        if (selectedEvent) query = query.eq("event_id", selectedEvent);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allPaymentData = [...allPaymentData, ...data];
+          from += 1000;
+        } else {
+          hasMore = false;
+        }
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      if (data.length === 0) {
+      if (allPaymentData.length === 0) {
         alert("No payment data available to export");
         return;
       }
 
-      const paymentData = generatePaymentCSV(data);
+      const paymentData = generatePaymentCSV(allPaymentData);
       const headers = [
         { label: "Event No" },
         { label: "Event Name" },
@@ -361,19 +387,27 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const handleExportNBA = async () => {
     setIsExporting(true);
     try {
-      // Fetch all registrations with full details (no event filter for NBA report)
-      const { data, error } = await supabase.from("registrations").select(`
-                    id,
-                    status,
-                    team_members,
-                    event:events(id, name, category, subcategory)
-                `);
+      let allNBAData = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("registrations")
+          .select(`id, status, team_members, event:events(id, name, category, subcategory)`)
+          .range(from, from + 999);
 
-      // Generate NBA CSV (works with empty data too - shows structure)
-      const csv = generateNBACSV(data || []);
-      downloadCSV(csv, `NBA_Bonomy_2026_${getFormattedDate()}.csv`);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allNBAData = [...allNBAData, ...data];
+          from += 1000;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const csv = generateNBACSV(allNBAData);
+      downloadCSV(csv, `NBA_Bonhomie_2026_${getFormattedDate()}.csv`);
     } catch (error) {
       console.error("Error exporting NBA report:", error);
       alert("Failed to export NBA report");
@@ -468,44 +502,32 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
       {/* Tab Content */}
       {activeTab === "participation" && (
         <div className="space-y-6">
-          {/* Key Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Enhanced Total Registrations Card with Status Breakdown */}
             <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-sm border border-gray-200 p-6 text-white relative overflow-hidden">
-              {/* Background decoration */}
               <div className="absolute top-0 right-0 w-20 h-20 bg-white opacity-10 rounded-full -mr-10 -mt-10"></div>
-
               <div className="relative">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm opacity-90">Total Registrations</p>
                   <Users className="h-8 w-8 opacity-75" />
                 </div>
-
                 <p className="text-4xl font-bold mb-4">{stats.totalRegistrations}</p>
-
-                {/* Status Breakdown */}
                 <div className="grid grid-cols-3 gap-2">
-                  {/* Confirmed */}
-                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-green-500/30 hover:scale-105 transition-all duration-200">
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5">
                     <div className="text-xs opacity-75">Confirmed</div>
                     <div className="text-lg font-bold text-green-300">
-                      {stats.statusBreakdown?.confirmed || 0}
+                      {stats.statusBreakdown.confirmed}
                     </div>
                   </div>
-
-                  {/* Pending */}
-                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-blue-400/30 hover:scale-105 transition-all duration-200">
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5">
                     <div className="text-xs opacity-75">Pending</div>
                     <div className="text-lg font-bold text-blue-300">
-                      {stats.statusBreakdown?.pending || 0}
+                      {stats.statusBreakdown.pending}
                     </div>
                   </div>
-
-                  {/* Rejected */}
-                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-red-500/30 hover:scale-105 transition-all duration-200">
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5">
                     <div className="text-xs opacity-75">Rejected</div>
                     <div className="text-lg font-bold text-red-300">
-                      {stats.statusBreakdown?.rejected || 0}
+                      {stats.statusBreakdown.rejected}
                     </div>
                   </div>
                 </div>
@@ -537,9 +559,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             </div>
           </div>
 
-          {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Gender Distribution */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Gender Distribution</h3>
               <div className="space-y-3">
@@ -564,7 +584,6 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
               </div>
             </div>
 
-            {/* Department Breakdown */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Department Breakdown</h3>
               <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -581,38 +600,11 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
               </div>
             </div>
           </div>
-
-          {/* Event Popularity */}
-          {!selectedEvent && stats.eventPopularity.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Popular Events</h3>
-              <div className="space-y-3">
-                {stats.eventPopularity.map((event, index) => (
-                  <div key={event.name} className="flex items-center gap-4">
-                    <span className="text-lg font-bold text-gray-400 w-6">{index + 1}</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{event.name}</p>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                        <div
-                          className="bg-indigo-600 h-2 rounded-full"
-                          style={{
-                            width: `${(event.count / stats.eventPopularity[0].count) * 100}%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900">{event.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {activeTab === "payment" && (
         <div className="space-y-6">
-          {/* Revenue Summary */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
               <p className="text-sm opacity-90">Total Revenue</p>
@@ -620,7 +612,6 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                 ₹{paymentStats.totalRevenue.toLocaleString()}
               </p>
             </div>
-
             {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amount]) => (
               <div key={mode} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <p className="text-sm text-gray-600 capitalize">{mode} Payments</p>
@@ -629,7 +620,6 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             ))}
           </div>
 
-          {/* Event Revenue Table */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Event Revenue Ranking</h3>
