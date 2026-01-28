@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, Users, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { ArrowLeft, Edit2, Users, DollarSign, BarChart3, Clock, Calendar, MapPin, Download, Check, X as XIcon, Search, Plus, Trash2, Eye, Activity, ChevronDown, ChevronUp, User, AlertCircle } from 'lucide-react'
 import SmartTable from '../../components/admin/ui/SmartTable'
 import { AdminInput, AdminSelect } from '../../components/admin/ui/AdminForm'
 import ProfilePage from '../../components/profile/ProfilePage'
@@ -11,11 +11,16 @@ import AnimatedBannerFallback from '../../components/ui/AnimatedBannerFallback'
 
 export default function CoordinatorEventManage() {
     const { id } = useParams()
+    const location = useLocation()
     const [activeTab, setActiveTab] = useState('overview')
     const [event, setEvent] = useState(null)
     const [loading, setLoading] = useState(true)
     const [expandedTeams, setExpandedTeams] = useState(new Set()) // Track which teams are expanded
     const [showMembersOnly, setShowMembersOnly] = useState(false) // Toggle for members view
+
+    // Determine the back link based on current path
+    const isAdminPath = location.pathname.includes('/admin/')
+    const backLink = isAdminPath ? '/admin/advanced-management' : '/coordinator/events'
 
     // Participants State
     const [participants, setParticipants] = useState([])
@@ -44,6 +49,49 @@ export default function CoordinatorEventManage() {
     const [replaceModal, setReplaceModal] = useState({ isOpen: false, memberId: null, memberName: '' })
     const [replaceRollNumber, setReplaceRollNumber] = useState('')
     const [isReplacing, setIsReplacing] = useState(false)
+    
+    // Add Member State
+    const [addMemberModal, setAddMemberModal] = useState({ isOpen: false, leaderId: null, leaderName: '' })
+    const [addMemberRollNumber, setAddMemberRollNumber] = useState('')
+    const [isAddingMember, setIsAddingMember] = useState(false)
+
+    // Offline Registration State - Add Participant Modal (Individual Events)
+    const [addParticipantModal, setAddParticipantModal] = useState({
+        isOpen: false,
+        rollNumber: '',
+        loading: false,
+        profile: null,
+        error: null,
+        alreadyRegistered: false,
+        registrationDetails: null
+    })
+
+    // Offline Registration State - Create Profile Modal
+    const [createProfileModal, setCreateProfileModal] = useState({
+        isOpen: false,
+        rollNumber: '',
+        fullName: '',
+        phone: '',
+        email: '',
+        loading: false,
+        error: null,
+        returnToAddParticipant: false // Track if we should return to add participant after creation
+    })
+
+    // Offline Registration State - Add Team Modal (Group Events)
+    const [addTeamModal, setAddTeamModal] = useState({
+        isOpen: false,
+        step: 1, // 1 = Leader, 2 = Members
+        leaderRollNumber: '',
+        leaderProfile: null,
+        memberSearch: '',
+        searchResults: [],
+        selectedMembers: [],
+        loading: false,
+        error: null,
+        creatingMemberInline: false,
+        inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+    })
 
     useEffect(() => {
         fetchEventDetails()
@@ -166,6 +214,745 @@ export default function CoordinatorEventManage() {
         }
 
         setLoadingPayments(false)
+    }
+
+    // ============================================
+    // OFFLINE REGISTRATION HELPER FUNCTIONS
+    // ============================================
+
+    /**
+     * Validate roll number and check if profile exists and eligible for registration
+     * @param {string} rollNumber - Student's roll number
+     * @param {boolean} forTeamLeader - Whether this is for team leader validation
+     * @returns {object} Validation result with profile data or error
+     */
+    const validateRollNumber = async (rollNumber, forTeamLeader = false) => {
+        try {
+            const normalized = rollNumber.trim().toLowerCase()
+            
+            if (!normalized) {
+                return { valid: false, error: 'Roll number is required' }
+            }
+
+            // 1. Check if profile exists
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, full_name, roll_number, phone, college_email, department, year_of_study, is_admin_created')
+                .ilike('roll_number', normalized)
+                .maybeSingle()
+
+            if (profileError && profileError.code !== 'PGRST116') {
+                throw profileError
+            }
+
+            if (!profile) {
+                return {
+                    valid: false,
+                    error: 'Profile not found',
+                    action: 'create',
+                    rollNumber: normalized
+                }
+            }
+
+            // 2. Check if already registered for this event
+            const { data: existingReg, error: regError } = await supabase
+                .from('registrations')
+                .select('id, status, registered_at')
+                .eq('profile_id', profile.id)
+                .eq('event_id', id)
+                .maybeSingle()
+
+            if (regError) throw regError
+
+            if (existingReg) {
+                return {
+                    valid: false,
+                    error: 'Already registered',
+                    alreadyRegistered: true,
+                    profile: profile,
+                    registration: existingReg
+                }
+            }
+
+            // 3. For team members: Check if already in another team for this event
+            if (!forTeamLeader) {
+                const { data: teamRegs, error: teamError } = await supabase
+                    .from('registrations')
+                    .select('id, team_members, user:profiles!registrations_profile_id_fkey(full_name)')
+                    .eq('event_id', id)
+                    .not('team_members', 'eq', '[]')
+
+                if (teamError) throw teamError
+
+                const foundInTeam = teamRegs?.find(reg =>
+                    reg.team_members?.some(member => member.id === profile.id)
+                )
+
+                if (foundInTeam) {
+                    return {
+                        valid: false,
+                        error: `Already a member of ${foundInTeam.user?.full_name || 'another'}'s team`,
+                        profile: profile
+                    }
+                }
+            }
+
+            // 4. All checks passed
+            return {
+                valid: true,
+                profile: profile
+            }
+        } catch (error) {
+            console.error('Validation error:', error)
+            return {
+                valid: false,
+                error: 'Validation failed. Please try again.'
+            }
+        }
+    }
+
+    /**
+     * Create a new offline profile through admin/coordinator
+     * Creates BOTH profile AND auth user with default password
+     * User can login immediately with rollnumber@aiktc.ac.in / Bonhomie@2026
+     * @param {string} rollNumber - Student's roll number
+     * @param {string} fullName - Student's full name
+     * @param {string} phone - Student's phone number
+     * @returns {object} Created profile data with auth user
+     */
+    const createOfflineProfile = async (rollNumber, fullName, phone) => {
+        try {
+            const normalizedRoll = rollNumber.trim().toLowerCase()
+            const email = `${normalizedRoll}@aiktc.ac.in`
+
+            console.log('Creating offline profile with auth:', { normalizedRoll, fullName, phone, email })
+
+            // Call the PostgreSQL function that creates BOTH auth user and profile
+            const { data, error } = await supabase.rpc('create_offline_profile_with_auth', {
+                p_roll_number: normalizedRoll,
+                p_full_name: fullName.trim(),
+                p_college_email: email,
+                p_phone: phone.trim(),
+                p_department: 'General',
+                p_year_of_study: null
+            })
+
+            if (error) {
+                console.error('Error creating profile:', error)
+                throw new Error(error.message || 'Failed to create profile')
+            }
+
+            // Check if function returned success
+            if (!data || !data.success) {
+                const errorMsg = data?.error || 'Unknown error occurred'
+                console.error('Function returned error:', errorMsg)
+                throw new Error(errorMsg)
+            }
+
+            console.log('✅ Profile and Auth User created:', data)
+            console.log('🔑 Login credentials:', { email: data.email, password: data.default_password })
+
+            // Return profile data in expected format
+            const profile = {
+                id: data.profile_id,
+                full_name: data.full_name,
+                roll_number: data.roll_number,
+                college_email: data.email,
+                phone: phone.trim(),
+                is_admin_created: true,
+                auth_user_id: data.auth_user_id,
+                role: 'student',
+                department: 'General',
+                year_of_study: null
+            }
+
+            return {
+                success: true,
+                profile: profile
+            }
+        } catch (error) {
+            console.error('Profile creation error:', error)
+            throw new Error(error.message || 'Failed to create profile')
+        }
+    }
+
+    /**
+     * Register individual participant for offline registration
+     * Creates registration with payment_mode='cash' and status='confirmed'
+     * Cash payment = Offline registration (added manually by admin/coordinator)
+     * @param {string} profileId - UUID of the profile to register
+     * @returns {object} Created registration data
+     */
+    const registerIndividualOffline = async (profileId) => {
+        try {
+            const { data, error } = await supabase
+                .from('registrations')
+                .insert({
+                    profile_id: profileId,
+                    event_id: id,
+                    team_members: [],
+                    payment_mode: 'cash', // ⭐ Cash = Offline registration
+                    status: 'confirmed', // ⭐ Auto-confirmed (payment received)
+                    transaction_id: null,
+                    payment_screenshot_path: null
+                })
+                .select(`
+                    *,
+                    user:profiles(id, full_name, college_email, roll_number, department, year_of_study)
+                `)
+                .single()
+
+            if (error) {
+                if (error.code === '23505') {
+                    throw new Error('User already registered for this event')
+                }
+                throw error
+            }
+
+            // Log audit
+            const currentUser = (await supabase.auth.getUser()).data.user
+            await supabase.from('audit_logs').insert({
+                actor_id: currentUser?.id,
+                action: 'OFFLINE_REGISTRATION_INDIVIDUAL',
+                metadata: {
+                    registration_id: data.id,
+                    profile_id: profileId,
+                    event_id: id,
+                    payment_mode: 'cash'
+                }
+            })
+
+            return { success: true, registration: data }
+        } catch (error) {
+            console.error('Registration error:', error)
+            throw error
+        }
+    }
+
+    /**
+     * Register team for offline registration
+     * Creates leader and member registrations with payment_mode='cash'
+     * Cash payment = Offline registration (added manually by admin/coordinator)
+     * @param {string} leaderProfileId - UUID of team leader profile
+     * @param {array} teamMemberProfiles - Array of member profile objects
+     * @returns {object} Created leader registration data
+     */
+    const registerTeamOffline = async (leaderProfileId, teamMemberProfiles) => {
+        try {
+            const totalSize = teamMemberProfiles.length + 1
+            
+            // Validate team size
+            if (totalSize < event.min_team_size) {
+                throw new Error(`Team size must be at least ${event.min_team_size} (including leader). Current: ${totalSize}`)
+            }
+            if (totalSize > event.max_team_size) {
+                throw new Error(`Team size cannot exceed ${event.max_team_size} (including leader). Current: ${totalSize}`)
+            }
+
+            // Build team_members array
+            const teamMembersArray = teamMemberProfiles.map(p => ({
+                id: p.id,
+                full_name: p.full_name,
+                roll_number: p.roll_number,
+                phone: p.phone || null
+            }))
+
+            // 1. Create LEADER registration
+            const { data: leaderReg, error: leaderError } = await supabase
+                .from('registrations')
+                .insert({
+                    profile_id: leaderProfileId,
+                    event_id: id,
+                    team_members: teamMembersArray,
+                    payment_mode: 'cash', // ⭐ Cash = Offline registration
+                    status: 'confirmed',
+                    transaction_id: null,
+                    payment_screenshot_path: null
+                })
+                .select(`
+                    *,
+                    user:profiles(id, full_name, college_email, roll_number, department, year_of_study)
+                `)
+                .single()
+
+            if (leaderError) {
+                if (leaderError.code === '23505') {
+                    throw new Error('Team leader already registered for this event')
+                }
+                throw leaderError
+            }
+
+            // 2. Create MEMBER registrations
+            const memberRegistrations = teamMemberProfiles.map(member => ({
+                profile_id: member.id,
+                event_id: id,
+                team_members: [],
+                payment_mode: 'cash', // ⭐ Cash = Offline registration
+                status: 'confirmed',
+                transaction_id: null,
+                payment_screenshot_path: null
+            }))
+
+            const { error: memberError } = await supabase
+                .from('registrations')
+                .insert(memberRegistrations)
+
+            if (memberError) {
+                // Rollback leader registration if member insert fails
+                await supabase
+                    .from('registrations')
+                    .delete()
+                    .eq('id', leaderReg.id)
+                
+                throw new Error('Failed to register team members. Please try again.')
+            }
+
+            // 3. Log audit
+            const currentUser = (await supabase.auth.getUser()).data.user
+            await supabase.from('audit_logs').insert({
+                actor_id: currentUser?.id,
+                action: 'OFFLINE_REGISTRATION_TEAM',
+                metadata: {
+                    registration_id: leaderReg.id,
+                    leader_profile_id: leaderProfileId,
+                    event_id: id,
+                    team_size: totalSize,
+                    team_member_ids: teamMemberProfiles.map(m => m.id),
+                    payment_mode: 'cash'
+                }
+            })
+
+            return { success: true, registration: leaderReg }
+        } catch (error) {
+            console.error('Team registration error:', error)
+            throw error
+        }
+    }
+
+    /**
+     * Search for members by roll number for team events
+     * @param {string} searchTerm - Roll number search term
+     * @returns {array} Array of matching profiles
+     */
+    const searchMembersByRollNumber = async (searchTerm) => {
+        if (!searchTerm || searchTerm.length < 2) {
+            return []
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, full_name, roll_number, phone, department, year_of_study, college_email')
+                .ilike('roll_number', `%${searchTerm}%`)
+                .limit(10)
+
+            if (error) throw error
+            return data || []
+        } catch (error) {
+            console.error('Search error:', error)
+            return []
+        }
+    }
+
+    // ============================================
+    // OFFLINE REGISTRATION UI HANDLERS
+    // ============================================
+
+    /**
+     * Handle clicking the "+ Add" button in Participants tab
+     * Opens appropriate modal based on event type (individual/group)
+     */
+    const handleAddParticipantClick = () => {
+        if (event?.subcategory?.toLowerCase() === 'group') {
+            // Open team modal
+            setAddTeamModal({
+                isOpen: true,
+                step: 1,
+                leaderRollNumber: '',
+                leaderProfile: null,
+                memberSearch: '',
+                searchResults: [],
+                selectedMembers: [],
+                loading: false,
+                error: null,
+                creatingMemberInline: false,
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+            })
+        } else {
+            // Open individual participant modal
+            setAddParticipantModal({
+                isOpen: true,
+                rollNumber: '',
+                loading: false,
+                profile: null,
+                error: null,
+                alreadyRegistered: false,
+                registrationDetails: null
+            })
+        }
+    }
+
+    /**
+     * Validate roll number in Add Participant modal (Individual events)
+     */
+    const handleValidateIndividualRollNumber = async () => {
+        const rollNumber = addParticipantModal.rollNumber.trim()
+        
+        if (!rollNumber) {
+            setAddParticipantModal(prev => ({ ...prev, error: 'Please enter a roll number' }))
+            return
+        }
+
+        setAddParticipantModal(prev => ({ ...prev, loading: true, error: null }))
+
+        const result = await validateRollNumber(rollNumber, false)
+
+        if (result.valid) {
+            setAddParticipantModal(prev => ({
+                ...prev,
+                loading: false,
+                profile: result.profile,
+                error: null
+            }))
+        } else if (result.action === 'create') {
+            // Profile doesn't exist - show option to create
+            setAddParticipantModal(prev => ({
+                ...prev,
+                loading: false,
+                error: result.error,
+                profile: null
+            }))
+        } else if (result.alreadyRegistered) {
+            setAddParticipantModal(prev => ({
+                ...prev,
+                loading: false,
+                error: result.error,
+                alreadyRegistered: true,
+                profile: result.profile,
+                registrationDetails: result.registration
+            }))
+        } else {
+            setAddParticipantModal(prev => ({
+                ...prev,
+                loading: false,
+                error: result.error,
+                profile: result.profile
+            }))
+        }
+    }
+
+    /**
+     * Open Create Profile modal from Add Participant modal
+     */
+    const handleOpenCreateProfile = (rollNumber, returnToAddParticipant = false) => {
+        const normalized = rollNumber.trim().toLowerCase()
+        setCreateProfileModal({
+            isOpen: true,
+            rollNumber: normalized,
+            fullName: '',
+            phone: '',
+            email: `${normalized}@aiktc.ac.in`,
+            loading: false,
+            error: null,
+            returnToAddParticipant
+        })
+    }
+
+    /**
+     * Handle creating new profile from Create Profile modal
+     */
+    const handleCreateProfile = async () => {
+        const { rollNumber, fullName, phone } = createProfileModal
+
+        if (!fullName.trim()) {
+            setCreateProfileModal(prev => ({ ...prev, error: 'Full name is required' }))
+            return
+        }
+
+        if (!phone.trim() || phone.length !== 10 || !/^\d+$/.test(phone)) {
+            setCreateProfileModal(prev => ({ ...prev, error: 'Please enter a valid 10-digit phone number' }))
+            return
+        }
+
+        setCreateProfileModal(prev => ({ ...prev, loading: true, error: null }))
+
+        try {
+            const result = await createOfflineProfile(rollNumber, fullName, phone)
+            
+            // Success! Close create modal
+            setCreateProfileModal({
+                isOpen: false,
+                rollNumber: '',
+                fullName: '',
+                phone: '',
+                email: '',
+                loading: false,
+                error: null,
+                returnToAddParticipant: false
+            })
+
+            // If coming from Add Participant modal, go back there with the new profile
+            if (createProfileModal.returnToAddParticipant) {
+                setAddParticipantModal(prev => ({
+                    ...prev,
+                    profile: result.profile,
+                    error: null
+                }))
+            }
+
+            alert(`✅ Profile created successfully for ${fullName}!\n\nEmail: ${result.profile.college_email}\n\nNote: Student must sign up with this email to activate their account.`)
+        } catch (error) {
+            setCreateProfileModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to create profile'
+            }))
+        }
+    }
+
+    /**
+     * Register individual participant (offline)
+     */
+    const handleRegisterIndividualParticipant = async () => {
+        if (!addParticipantModal.profile) {
+            return
+        }
+
+        setAddParticipantModal(prev => ({ ...prev, loading: true, error: null }))
+
+        try {
+            await registerIndividualOffline(addParticipantModal.profile.id)
+            
+            // Success!
+            setAddParticipantModal({
+                isOpen: false,
+                rollNumber: '',
+                loading: false,
+                profile: null,
+                error: null,
+                alreadyRegistered: false,
+                registrationDetails: null
+            })
+
+            alert(`✅ ${addParticipantModal.profile.full_name} registered successfully for ${event.name}!`)
+            
+            // Refresh participants list
+            fetchParticipants()
+        } catch (error) {
+            setAddParticipantModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to register participant'
+            }))
+        }
+    }
+
+    /**
+     * Validate team leader roll number in Add Team modal
+     */
+    const handleValidateTeamLeader = async () => {
+        const rollNumber = addTeamModal.leaderRollNumber.trim()
+        
+        if (!rollNumber) {
+            setAddTeamModal(prev => ({ ...prev, error: 'Please enter team leader roll number' }))
+            return
+        }
+
+        setAddTeamModal(prev => ({ ...prev, loading: true, error: null }))
+
+        const result = await validateRollNumber(rollNumber, true)
+
+        if (result.valid) {
+            setAddTeamModal(prev => ({
+                ...prev,
+                loading: false,
+                leaderProfile: result.profile,
+                error: null
+            }))
+        } else if (result.action === 'create') {
+            setAddTeamModal(prev => ({
+                ...prev,
+                loading: false,
+                error: result.error,
+                leaderProfile: null
+            }))
+        } else {
+            setAddTeamModal(prev => ({
+                ...prev,
+                loading: false,
+                error: result.error,
+                leaderProfile: null
+            }))
+        }
+    }
+
+    /**
+     * Proceed to add members step in team modal
+     */
+    const handleProceedToAddMembers = () => {
+        if (!addTeamModal.leaderProfile) {
+            return
+        }
+        setAddTeamModal(prev => ({ ...prev, step: 2, error: null }))
+    }
+
+    /**
+     * Search for team members by roll number
+     */
+    const handleSearchTeamMembers = async (searchTerm) => {
+        console.log('Searching for team members with term:', searchTerm)
+        setAddTeamModal(prev => ({ ...prev, memberSearch: searchTerm, loading: true }))
+        
+        const results = await searchMembersByRollNumber(searchTerm)
+        console.log('Search results:', results.length, 'profiles found')
+        
+        // Filter out leader and already selected members
+        const filteredResults = results.filter(profile => 
+            profile.id !== addTeamModal.leaderProfile.id &&
+            !addTeamModal.selectedMembers.some(m => m.id === profile.id)
+        )
+        
+        console.log('Filtered results:', filteredResults.length, 'after removing leader/selected')
+        
+        setAddTeamModal(prev => ({
+            ...prev,
+            searchResults: filteredResults,
+            loading: false
+        }))
+    }
+
+    /**
+     * Add selected member to team
+     */
+    const handleSelectTeamMember = async (profile) => {
+        // Validate this member can be added
+        const result = await validateRollNumber(profile.roll_number, false)
+        
+        if (!result.valid) {
+            alert(result.error)
+            return
+        }
+
+        setAddTeamModal(prev => ({
+            ...prev,
+            selectedMembers: [...prev.selectedMembers, profile],
+            memberSearch: '',
+            searchResults: []
+        }))
+    }
+
+    /**
+     * Remove member from selected team members
+     */
+    const handleRemoveTeamMember = (memberId) => {
+        setAddTeamModal(prev => ({
+            ...prev,
+            selectedMembers: prev.selectedMembers.filter(m => m.id !== memberId)
+        }))
+    }
+
+    /**
+     * Create inline member profile during team creation
+     */
+    const handleCreateInlineMember = async () => {
+        const { rollNumber, fullName, phone } = addTeamModal.inlineCreateData
+
+        if (!rollNumber.trim()) {
+            alert('Roll number is required')
+            return
+        }
+
+        if (!fullName.trim()) {
+            alert('Full name is required')
+            return
+        }
+
+        if (!phone.trim()) {
+            alert('Phone number is required')
+            return
+        }
+
+        if (phone.length !== 10 || !/^\d+$/.test(phone)) {
+            alert('Please enter a valid 10-digit phone number')
+            return
+        }
+
+        setAddTeamModal(prev => ({ ...prev, loading: true, error: null }))
+
+        try {
+            console.log('Creating inline profile:', { rollNumber, fullName, phone })
+            const result = await createOfflineProfile(rollNumber, fullName, phone)
+            
+            if (!result.success || !result.profile) {
+                throw new Error('Profile creation returned invalid data')
+            }
+
+            console.log('Profile created successfully, adding to team:', result.profile)
+            
+            // Add to selected members and clear form
+            setAddTeamModal(prev => ({
+                ...prev,
+                selectedMembers: [...prev.selectedMembers, result.profile],
+                creatingMemberInline: false,
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '' },
+                memberSearch: '', // Clear search field
+                searchResults: [], // Clear search results
+                loading: false,
+                error: null
+            }))
+
+            alert(`✅ Profile created and added to team!\n\nName: ${result.profile.full_name}\nRoll: ${result.profile.roll_number}`)
+        } catch (error) {
+            console.error('Failed to create inline profile:', error)
+            alert('Failed to create profile: ' + error.message)
+            setAddTeamModal(prev => ({ 
+                ...prev, 
+                loading: false,
+                error: error.message 
+            }))
+        }
+    }
+
+    /**
+     * Register team (offline)
+     */
+    const handleRegisterTeam = async () => {
+        if (!addTeamModal.leaderProfile || addTeamModal.selectedMembers.length === 0) {
+            return
+        }
+
+        setAddTeamModal(prev => ({ ...prev, loading: true, error: null }))
+
+        try {
+            await registerTeamOffline(addTeamModal.leaderProfile.id, addTeamModal.selectedMembers)
+            
+            // Success!
+            const teamSize = addTeamModal.selectedMembers.length + 1
+            setAddTeamModal({
+                isOpen: false,
+                step: 1,
+                leaderRollNumber: '',
+                leaderProfile: null,
+                memberSearch: '',
+                searchResults: [],
+                selectedMembers: [],
+                loading: false,
+                error: null,
+                creatingMemberInline: false,
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+            })
+
+            alert(`✅ Team registered successfully!\n\nLeader: ${addTeamModal.leaderProfile.full_name}\nTeam Size: ${teamSize} members\nEvent: ${event.name}`)
+            
+            // Refresh participants list
+            fetchParticipants()
+        } catch (error) {
+            setAddTeamModal(prev => ({
+                ...prev,
+                loading: false,
+                error: error.message || 'Failed to register team'
+            }))
+        }
     }
 
     const handleExportCSV = async () => {
@@ -304,6 +1091,294 @@ export default function CoordinatorEventManage() {
         else fetchParticipants()
     }
 
+    const handleReplaceMember = async () => {
+        if (!replaceRollNumber.trim()) {
+            alert('Please enter a roll number')
+            return
+        }
+
+        setIsReplacing(true)
+        try {
+            // Find the new profile by roll number (case-insensitive)
+            const { data: newProfile, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, full_name, roll_number')
+                .ilike('roll_number', replaceRollNumber.trim())
+                .single()
+
+            if (profileError || !newProfile) {
+                alert('Profile not found with this roll number')
+                return
+            }
+
+            // Get the current member's registration
+            const currentMember = participants.find(p => p.id === replaceModal.memberId)
+            if (!currentMember) {
+                alert('Current member not found')
+                return
+            }
+
+            // Find the team leader whose team_members contains this member
+            const { data: leaderRegs, error: leaderError } = await supabase
+                .from('registrations')
+                .select('id, profile_id, team_members')
+                .eq('event_id', id)
+                .eq('status', 'confirmed')
+
+            if (leaderError) throw leaderError
+
+            const leader = leaderRegs.find(reg => 
+                reg.team_members && 
+                Array.isArray(reg.team_members) &&
+                reg.team_members.some(m => m.id === currentMember.profile_id)
+            )
+
+            if (!leader) {
+                alert('Team leader not found for this member')
+                return
+            }
+
+            // Update team leader's team_members array - replace old member ID with new member
+            const updatedTeamMembers = leader.team_members.map(member => {
+                if (member.id === currentMember.profile_id) {
+                    return {
+                        ...member,
+                        id: newProfile.id,
+                        full_name: newProfile.full_name,
+                        roll_number: newProfile.roll_number
+                    }
+                }
+                return member
+            })
+
+            const { error: updateLeaderError } = await supabase
+                .from('registrations')
+                .update({ team_members: updatedTeamMembers })
+                .eq('id', leader.id)
+
+            if (updateLeaderError) throw updateLeaderError
+
+            // Update the member's registration entry with new profile_id
+            const { error: updateMemberError } = await supabase
+                .from('registrations')
+                .update({ profile_id: newProfile.id })
+                .eq('id', replaceModal.memberId)
+
+            if (updateMemberError) throw updateMemberError
+
+            alert(`Member successfully replaced with ${newProfile.full_name}!`)
+            setReplaceModal({ isOpen: false, memberId: null, memberName: '' })
+            setReplaceRollNumber('')
+            fetchParticipants()
+        } catch (error) {
+            console.error('Error replacing member:', error)
+            alert('Failed to replace member: ' + error.message)
+        } finally {
+            setIsReplacing(false)
+        }
+    }
+
+    const handleDeleteMember = async (memberId, memberName) => {
+        try {
+            // Get the member's registration to find their profile_id
+            const { data: memberReg, error: memberError } = await supabase
+                .from('registrations')
+                .select('profile_id')
+                .eq('id', memberId)
+                .single()
+
+            if (memberError || !memberReg) {
+                alert('Member not found')
+                return
+            }
+
+            // Find the team leader whose team_members contains this member
+            const { data: leaderRegs, error: leaderError } = await supabase
+                .from('registrations')
+                .select('id, profile_id, team_members')
+                .eq('event_id', id)
+                .eq('status', 'confirmed')
+
+            if (leaderError) throw leaderError
+
+            const leader = leaderRegs.find(reg => 
+                reg.team_members && 
+                Array.isArray(reg.team_members) &&
+                reg.team_members.some(m => m.id === memberReg.profile_id)
+            )
+
+            // For group events, check minimum team size before deletion
+            if (event?.subcategory === 'Group' && event?.min_team_size && leader) {
+                const currentTeamSize = (leader.team_members?.length || 0) + 1 // +1 for leader
+                const sizeAfterDeletion = currentTeamSize - 1
+                
+                if (sizeAfterDeletion < event.min_team_size) {
+                    const message = 
+                        `⚠️ Cannot Delete Member\n\n` +
+                        `This event requires a minimum of ${event.min_team_size} team members (including leader).\n\n` +
+                        `Current team size: ${currentTeamSize}\n` +
+                        `After deletion: ${sizeAfterDeletion}\n\n` +
+                        `Options:\n` +
+                        `1. Add another member first, then delete this one\n` +
+                        `2. Delete the entire team registration instead\n\n` +
+                        `Do you want to delete the ENTIRE TEAM registration instead?`
+                    
+                    const deleteWholeTeam = confirm(message)
+                    
+                    if (deleteWholeTeam) {
+                        // Delete all team member registrations first
+                        for (const member of leader.team_members) {
+                            const { error: deleteMemberError } = await supabase
+                                .from('registrations')
+                                .delete()
+                                .eq('event_id', id)
+                                .eq('profile_id', member.id)
+                            
+                            if (deleteMemberError) {
+                                console.error('Error deleting team member:', deleteMemberError)
+                            }
+                        }
+                        
+                        // Delete the leader's registration
+                        const { error: deleteLeaderError } = await supabase
+                            .from('registrations')
+                            .delete()
+                            .eq('id', leader.id)
+                        
+                        if (deleteLeaderError) throw deleteLeaderError
+                        
+                        alert('✅ Entire team registration deleted successfully')
+                        fetchParticipants()
+                        return
+                    } else {
+                        // User cancelled
+                        return
+                    }
+                }
+            }
+
+            // Regular confirmation for allowed deletions
+            const confirmed = confirm(`Are you sure you want to delete ${memberName} from this event? This action cannot be undone.`)
+            if (!confirmed) return
+
+            // If leader found, remove member from team_members array
+            if (leader) {
+                const updatedTeamMembers = leader.team_members.filter(
+                    member => member.id !== memberReg.profile_id
+                )
+
+                const { error: updateLeaderError } = await supabase
+                    .from('registrations')
+                    .update({ team_members: updatedTeamMembers })
+                    .eq('id', leader.id)
+
+                if (updateLeaderError) throw updateLeaderError
+            }
+
+            // Delete the member's registration
+            const { error: deleteError } = await supabase
+                .from('registrations')
+                .delete()
+                .eq('id', memberId)
+
+            if (deleteError) throw deleteError
+
+            alert('Member deleted successfully')
+            fetchParticipants()
+        } catch (error) {
+            console.error('Error deleting member:', error)
+            alert('Failed to delete member')
+        }
+    }
+
+    const handleAddMember = async () => {
+        if (!addMemberRollNumber.trim()) {
+            alert('Please enter a roll number')
+            return
+        }
+
+        setIsAddingMember(true)
+        try {
+            // Find the profile by roll number (case-insensitive)
+            const { data: newProfile, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, full_name, roll_number')
+                .ilike('roll_number', addMemberRollNumber.trim())
+                .single()
+
+            if (profileError || !newProfile) {
+                alert('Profile not found with this roll number')
+                return
+            }
+
+            // Check if this person is already registered for this event
+            const { data: existingReg, error: checkError } = await supabase
+                .from('registrations')
+                .select('id')
+                .eq('event_id', id)
+                .eq('profile_id', newProfile.id)
+                .maybeSingle()
+
+            if (checkError) throw checkError
+
+            if (existingReg) {
+                alert('This person is already registered for this event')
+                return
+            }
+
+            // Get the team leader's registration
+            const { data: leaderReg, error: leaderError } = await supabase
+                .from('registrations')
+                .select('id, team_members')
+                .eq('id', addMemberModal.leaderId)
+                .single()
+
+            if (leaderError || !leaderReg) {
+                alert('Team leader not found')
+                return
+            }
+
+            // Add new member to team_members array
+            const updatedTeamMembers = [
+                ...(leaderReg.team_members || []),
+                {
+                    id: newProfile.id,
+                    full_name: newProfile.full_name,
+                    roll_number: newProfile.roll_number
+                }
+            ]
+
+            // Update leader's team_members array
+            const { error: updateLeaderError } = await supabase
+                .from('registrations')
+                .update({ team_members: updatedTeamMembers })
+                .eq('id', addMemberModal.leaderId)
+
+            if (updateLeaderError) throw updateLeaderError
+
+            // Create new registration for the member
+            const { error: createRegError } = await supabase
+                .from('registrations')
+                .insert({
+                    event_id: id,
+                    profile_id: newProfile.id,
+                    status: 'confirmed',
+                    team_members: [] // Members have empty array
+                })
+
+            if (createRegError) throw createRegError
+
+            alert(`${newProfile.full_name} successfully added to the team!`)
+            setAddMemberModal({ isOpen: false, leaderId: null, leaderName: '' })
+            setAddMemberRollNumber('')
+            fetchParticipants()
+        } catch (error) {
+            console.error('Error adding member:', error)
+            alert('Failed to add member: ' + error.message)
+        } finally {
+            setIsAddingMember(false)
+        }
+    }
 
 
     const verifyPayment = async (registrationId) => {
@@ -645,7 +1720,7 @@ export default function CoordinatorEventManage() {
             {/* Header - Responsive */}
             <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <div className="flex items-center gap-3">
-                    <Link to="/coordinator/events" className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
+                    <Link to={backLink} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
                     <div>
                         <h1 className="text-xl md:text-2xl font-bold text-gray-900">{event.name}</h1>
                         <p className="text-gray-500 text-xs md:text-sm hidden md:block">Manage your event details and lifecycle.</p>
@@ -746,6 +1821,27 @@ export default function CoordinatorEventManage() {
                     {/* PARTICIPANTS */}
                     {activeTab === 'participants' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {/* Info Banner for Offline Registration */}
+                            <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-semibold text-blue-900 mb-1">Offline Registration Available</h4>
+                                        <p className="text-sm text-blue-800">
+                                            Use the <strong>"+ Add"</strong> button to register students who didn't register online. 
+                                            {event?.subcategory?.toLowerCase() === 'group' 
+                                                ? ' You can add complete teams with leaders and members.'
+                                                : ' You can add individual participants directly.'
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="text-lg font-bold text-gray-900">Participants</h3><p className="text-sm text-gray-500">Manage individuals and teams.</p></div>
                                 <div className="flex gap-2">
@@ -768,6 +1864,15 @@ export default function CoordinatorEventManage() {
                                             </button>
                                         )}
                                     </div>
+                                    {/* ADD PARTICIPANT/TEAM BUTTON - OFFLINE REGISTRATION ⭐ */}
+                                    <button
+                                        onClick={handleAddParticipantClick}
+                                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-sm"
+                                        title={event?.subcategory?.toLowerCase() === 'group' ? 'Add Team (Offline Registration)' : 'Add Participant (Offline Registration)'}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Add
+                                    </button>
                                     {/* Members Only Toggle (Group Events Only) */}
                                     {event?.subcategory?.toLowerCase() === 'group' && (
                                         <button
@@ -884,8 +1989,19 @@ export default function CoordinatorEventManage() {
 
                                                         {/* Action Buttons */}
                                                         <div className="flex items-center gap-2 ml-4">
-                                                            {/* Replace Button (Members Only) */}
-                                                            {showMembersOnly && (
+                                                            {/* Delete Button for Individual Events */}
+                                                            {!isGroupEvent && (
+                                                                <button
+                                                                    onClick={() => handleDeleteMember(participant.id, participant.user?.full_name || 'Unknown')}
+                                                                    className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                                                                    title="Delete Registration"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            )}
+
+                                                            {/* Replace Button (Members Only) - HIDDEN FOR NOW, KEEP LOGIC FOR FUTURE */}
+                                                            {/* {showMembersOnly && (
                                                                 <button
                                                                     onClick={() => {
                                                                         setReplaceModal({
@@ -900,7 +2016,7 @@ export default function CoordinatorEventManage() {
                                                                     <User className="h-4 w-4" />
                                                                     Replace
                                                                 </button>
-                                                            )}
+                                                            )} */}
 
                                                             {/* Delete Button (Members Only) */}
                                                             {showMembersOnly && (
@@ -910,6 +2026,23 @@ export default function CoordinatorEventManage() {
                                                                     title="Delete Member"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            )}
+
+                                                            {/* Add Member Button (Team Leaders Only) */}
+                                                            {isLeader && !showMembersOnly && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setAddMemberModal({
+                                                                            isOpen: true,
+                                                                            leaderId: participant.id,
+                                                                            leaderName: participant.user?.full_name || 'Unknown'
+                                                                        })
+                                                                    }}
+                                                                    className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                                                                    title="Add Team Member"
+                                                                >
+                                                                    <Plus className="h-4 w-4" />
                                                                 </button>
                                                             )}
 
@@ -1354,6 +2487,74 @@ export default function CoordinatorEventManage() {
                     {/* PAYMENTS */}
                     {activeTab === 'payments' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {/* Payment Stats Cards */}
+                            {(() => {
+                                // Calculate payment statistics
+                                // For Individual events: Each registration = 30 rupees
+                                // For Group events: Each team (leader registration) = 60 rupees
+                                const isGroupEvent = event?.subcategory === 'Group'
+                                const feePerUnit = isGroupEvent ? 60 : 30
+                                
+                                // Cash payments (offline registrations)
+                                const cashPayments = payments.filter(p => p.payment_mode === 'cash')
+                                // For group events, only count leaders (those with team_members)
+                                const cashRegistrations = isGroupEvent 
+                                    ? cashPayments.filter(p => p.team_members && p.team_members.length > 0).length
+                                    : cashPayments.length
+                                const cashAmount = cashRegistrations * feePerUnit
+                                
+                                // Online payments
+                                const onlinePayments = payments.filter(p => p.payment_mode === 'online' || p.payment_mode === 'hybrid')
+                                const onlineRegistrations = isGroupEvent
+                                    ? onlinePayments.filter(p => p.team_members && p.team_members.length > 0).length
+                                    : onlinePayments.length
+                                const onlineAmount = onlineRegistrations * feePerUnit
+                                
+                                // Total
+                                const totalAmount = cashAmount + onlineAmount
+                                const totalRegistrations = cashRegistrations + onlineRegistrations
+
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                        {/* Total Collections */}
+                                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white">
+                                            <div className="text-sm font-medium opacity-80">Total Collections</div>
+                                            <div className="text-2xl font-bold mt-1">₹{totalAmount.toLocaleString()}</div>
+                                            <div className="text-xs opacity-70 mt-1">
+                                                {totalRegistrations} {isGroupEvent ? 'teams' : 'registrations'}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Cash (Offline) */}
+                                        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white">
+                                            <div className="text-sm font-medium opacity-80">💵 Cash (Offline)</div>
+                                            <div className="text-2xl font-bold mt-1">₹{cashAmount.toLocaleString()}</div>
+                                            <div className="text-xs opacity-70 mt-1">
+                                                {cashRegistrations} {isGroupEvent ? 'teams' : 'registrations'} × ₹{feePerUnit}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Online */}
+                                        <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl p-4 text-white">
+                                            <div className="text-sm font-medium opacity-80">📱 Online</div>
+                                            <div className="text-2xl font-bold mt-1">₹{onlineAmount.toLocaleString()}</div>
+                                            <div className="text-xs opacity-70 mt-1">
+                                                {onlineRegistrations} {isGroupEvent ? 'teams' : 'registrations'} × ₹{feePerUnit}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Fee Info */}
+                                        <div className="bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl p-4 text-white">
+                                            <div className="text-sm font-medium opacity-80">Fee Structure</div>
+                                            <div className="text-2xl font-bold mt-1">₹{feePerUnit}</div>
+                                            <div className="text-xs opacity-70 mt-1">
+                                                per {isGroupEvent ? 'team' : 'participant'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="text-lg font-bold text-gray-900">Payment Verification</h3><p className="text-sm text-gray-500">Verify payments to move students to Participants. Hover over team leaders to expand and see all members.</p></div>
 
@@ -1947,6 +3148,691 @@ export default function CoordinatorEventManage() {
                             >
                                 Cancel
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add Member Modal */}
+            {addMemberModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => {
+                    setAddMemberModal({ isOpen: false, leaderId: null, leaderName: '' })
+                    setAddMemberRollNumber('')
+                }}>
+                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Add Team Member</h3>
+                        <p className="text-gray-600 mb-4">
+                            Adding to team of: <span className="font-semibold text-gray-800">{addMemberModal.leaderName}</span>
+                        </p>
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Enter Member's Roll Number
+                            </label>
+                            <input
+                                type="text"
+                                value={addMemberRollNumber}
+                                onChange={(e) => setAddMemberRollNumber(e.target.value)}
+                                placeholder="e.g., 2021BCS001"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                autoFocus
+                                disabled={isAddingMember}
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleAddMember}
+                                disabled={isAddingMember}
+                                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            >
+                                {isAddingMember ? 'Adding...' : 'Add Member'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setAddMemberModal({ isOpen: false, leaderId: null, leaderName: '' })
+                                    setAddMemberRollNumber('')
+                                }}
+                                disabled={isAddingMember}
+                                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============================================ */}
+            {/* ADD PARTICIPANT MODAL (Individual Events) */}
+            {/* ============================================ */}
+            {addParticipantModal.isOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                                Add Participant - {event?.name}
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Register a student for this event by entering their roll number
+                            </p>
+                            
+                            {/* Roll Number Input */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Student Roll Number <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={addParticipantModal.rollNumber}
+                                        onChange={(e) => setAddParticipantModal(prev => ({ ...prev, rollNumber: e.target.value, error: null, profile: null }))}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleValidateIndividualRollNumber()}
+                                        placeholder="Enter roll number (e.g., 23EC59)"
+                                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        disabled={addParticipantModal.loading}
+                                        autoFocus
+                                    />
+                                    <button
+                                        onClick={handleValidateIndividualRollNumber}
+                                        disabled={addParticipantModal.loading || !addParticipantModal.rollNumber}
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                        {addParticipantModal.loading ? '...' : 'Verify'}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">We'll check if this student has a profile in the system</p>
+                            </div>
+
+                            {/* Loading State */}
+                            {addParticipantModal.loading && (
+                                <div className="py-8 text-center">
+                                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    <p className="text-gray-600 mt-2">Validating...</p>
+                                </div>
+                            )}
+
+                            {/* Profile Found */}
+                            {addParticipantModal.profile && !addParticipantModal.alreadyRegistered && !addParticipantModal.loading && (
+                                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0">
+                                            <Check className="h-6 w-6 text-green-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-green-900 mb-2">✅ Profile Found</h3>
+                                            <div className="text-sm text-green-800 space-y-1">
+                                                <p><strong>Name:</strong> {addParticipantModal.profile.full_name}</p>
+                                                <p><strong>Email:</strong> {addParticipantModal.profile.college_email}</p>
+                                                <p><strong>Phone:</strong> {addParticipantModal.profile.phone || 'N/A'}</p>
+                                                <p><strong>Department:</strong> {addParticipantModal.profile.department || 'N/A'}</p>
+                                            </div>
+                                            <p className="text-xs text-green-600 mt-2">Click "Add Participant" to register</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Profile Not Found */}
+                            {addParticipantModal.error && addParticipantModal.error.includes('not found') && !addParticipantModal.loading && (
+                                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0">
+                                            <AlertCircle className="h-6 w-6 text-yellow-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-yellow-900 mb-2">⚠️ Profile Not Found</h3>
+                                            <p className="text-sm text-yellow-800 mb-3">
+                                                No registration exists for this roll number. Create a new profile to continue.
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    handleOpenCreateProfile(addParticipantModal.rollNumber, true)
+                                                    setAddParticipantModal(prev => ({ ...prev, isOpen: false }))
+                                                }}
+                                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 transition text-sm"
+                                            >
+                                                Create New Profile
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Already Registered */}
+                            {addParticipantModal.alreadyRegistered && !addParticipantModal.loading && (
+                                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0">
+                                            <XIcon className="h-6 w-6 text-red-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-red-900 mb-2">❌ Already Registered</h3>
+                                            <p className="text-sm text-red-800 mb-2">
+                                                {addParticipantModal.profile?.full_name} ({addParticipantModal.profile?.roll_number}) is already registered for this event.
+                                            </p>
+                                            {addParticipantModal.registrationDetails && (
+                                                <div className="text-xs text-red-700 mt-2">
+                                                    <p><strong>Status:</strong> {addParticipantModal.registrationDetails.status}</p>
+                                                    <p><strong>Registered:</strong> {new Date(addParticipantModal.registrationDetails.registered_at).toLocaleDateString()}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Other Errors */}
+                            {addParticipantModal.error && !addParticipantModal.error.includes('not found') && !addParticipantModal.alreadyRegistered && !addParticipantModal.loading && (
+                                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                    <p className="text-sm text-red-800">{addParticipantModal.error}</p>
+                                </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    onClick={handleRegisterIndividualParticipant}
+                                    disabled={!addParticipantModal.profile || addParticipantModal.alreadyRegistered || addParticipantModal.loading}
+                                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                    {addParticipantModal.loading ? 'Registering...' : 'Add Participant'}
+                                </button>
+                                <button
+                                    onClick={() => setAddParticipantModal({
+                                        isOpen: false,
+                                        rollNumber: '',
+                                        loading: false,
+                                        profile: null,
+                                        error: null,
+                                        alreadyRegistered: false,
+                                        registrationDetails: null
+                                    })}
+                                    disabled={addParticipantModal.loading}
+                                    className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============================================ */}
+            {/* CREATE PROFILE MODAL */}
+            {/* ============================================ */}
+            {createProfileModal.isOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <button
+                                    onClick={() => {
+                                        setCreateProfileModal({
+                                            isOpen: false,
+                                            rollNumber: '',
+                                            fullName: '',
+                                            phone: '',
+                                            email: '',
+                                            loading: false,
+                                            error: null,
+                                            returnToAddParticipant: false
+                                        })
+                                        if (createProfileModal.returnToAddParticipant) {
+                                            setAddParticipantModal(prev => ({ ...prev, isOpen: true }))
+                                        }
+                                    }}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition"
+                                >
+                                    <ArrowLeft className="h-5 w-5" />
+                                </button>
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                    Create New Profile
+                                </h2>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Roll Number (Read-only) */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Roll Number <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={createProfileModal.rollNumber}
+                                        disabled
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">🔒 Cannot be changed</p>
+                                </div>
+
+                                {/* Full Name */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Full Name <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={createProfileModal.fullName}
+                                        onChange={(e) => setCreateProfileModal(prev => ({ ...prev, fullName: e.target.value, error: null }))}
+                                        placeholder="e.g., John Doe"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        disabled={createProfileModal.loading}
+                                        autoFocus
+                                    />
+                                </div>
+
+                                {/* Phone Number */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Phone Number <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={createProfileModal.phone}
+                                        onChange={(e) => {
+                                            const value = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                            setCreateProfileModal(prev => ({ ...prev, phone: value, error: null }))
+                                        }}
+                                        placeholder="9876543210"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        disabled={createProfileModal.loading}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">ⓘ 10-digit mobile number</p>
+                                </div>
+
+                                {/* Email (Read-only) */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Email <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={createProfileModal.email}
+                                        disabled
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">🔒 Auto-generated from roll number</p>
+                                </div>
+
+                                {/* Password Info */}
+                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p className="text-sm text-blue-800">
+                                        <strong>Password:</strong> <code className="font-mono bg-blue-100 px-2 py-1 rounded">password</code>
+                                    </p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                        🔒 Default password will be set automatically
+                                    </p>
+                                </div>
+
+                                {/* Admin Created Flag Info */}
+                                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                    <p className="text-xs text-purple-800">
+                                        ⓘ Admin-created flag will be set automatically to track offline registrations
+                                    </p>
+                                </div>
+
+                                {/* Error Message */}
+                                {createProfileModal.error && (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                        <p className="text-sm text-red-800">{createProfileModal.error}</p>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-3 mt-6">
+                                    <button
+                                        onClick={handleCreateProfile}
+                                        disabled={createProfileModal.loading || !createProfileModal.fullName || !createProfileModal.phone}
+                                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                        {createProfileModal.loading ? 'Creating...' : 'Create & Add'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setCreateProfileModal({
+                                                isOpen: false,
+                                                rollNumber: '',
+                                                fullName: '',
+                                                phone: '',
+                                                email: '',
+                                                loading: false,
+                                                error: null,
+                                                returnToAddParticipant: false
+                                            })
+                                            if (createProfileModal.returnToAddParticipant) {
+                                                setAddParticipantModal(prev => ({ ...prev, isOpen: true }))
+                                            }
+                                        }}
+                                        disabled={createProfileModal.loading}
+                                        className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============================================ */}
+            {/* ADD TEAM MODAL (Group Events) */}
+            {/* ============================================ */}
+            {addTeamModal.isOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            {/* Step 1: Team Leader */}
+                            {addTeamModal.step === 1 && (
+                                <>
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                                        Add Team - {event?.name}
+                                    </h2>
+                                    <p className="text-sm text-gray-600 mb-6">
+                                        Step 1 of 2: Select Team Leader
+                                        <span className="block text-gray-500 mt-1">Enter the roll number of the student who will lead this team</span>
+                                    </p>
+
+                                    {/* Leader Roll Number Input */}
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Team Leader's Roll Number <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={addTeamModal.leaderRollNumber}
+                                                onChange={(e) => setAddTeamModal(prev => ({ ...prev, leaderRollNumber: e.target.value, error: null, leaderProfile: null }))}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleValidateTeamLeader()}
+                                                placeholder="Enter roll number (e.g., 25AI110)"
+                                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                disabled={addTeamModal.loading}
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={handleValidateTeamLeader}
+                                                disabled={addTeamModal.loading || !addTeamModal.leaderRollNumber}
+                                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                            >
+                                                {addTeamModal.loading ? '...' : 'Verify'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Leader Profile Display */}
+                                    {addTeamModal.leaderProfile && (
+                                        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                            <div className="flex items-start gap-3">
+                                                <Check className="h-6 w-6 text-green-600 flex-shrink-0" />
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-green-900 mb-2">✅ Leader: {addTeamModal.leaderProfile.full_name}</h3>
+                                                    <div className="text-sm text-green-800 space-y-1">
+                                                        <p><strong>Email:</strong> {addTeamModal.leaderProfile.college_email}</p>
+                                                        <p><strong>Phone:</strong> {addTeamModal.leaderProfile.phone || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Error Display */}
+                                    {addTeamModal.error && addTeamModal.error.includes('not found') && (
+                                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                            <p className="text-sm text-yellow-800 mb-3">{addTeamModal.error}</p>
+                                            <button
+                                                onClick={() => handleOpenCreateProfile(addTeamModal.leaderRollNumber, false)}
+                                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 transition text-sm"
+                                            >
+                                                Create New Profile
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {addTeamModal.error && !addTeamModal.error.includes('not found') && (
+                                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-800">{addTeamModal.error}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={handleProceedToAddMembers}
+                                            disabled={!addTeamModal.leaderProfile}
+                                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                        >
+                                            Continue to Add Members
+                                        </button>
+                                        <button
+                                            onClick={() => setAddTeamModal({
+                                                isOpen: false,
+                                                step: 1,
+                                                leaderRollNumber: '',
+                                                leaderProfile: null,
+                                                memberSearch: '',
+                                                searchResults: [],
+                                                selectedMembers: [],
+                                                loading: false,
+                                                error: null,
+                                                creatingMemberInline: false,
+                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                            })}
+                                            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Step 2: Add Members */}
+                            {addTeamModal.step === 2 && (
+                                <>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <button
+                                            onClick={() => setAddTeamModal(prev => ({ ...prev, step: 1, error: null }))}
+                                            className="p-2 hover:bg-gray-100 rounded-full transition"
+                                            title="Go back to team leader selection"
+                                        >
+                                            <ArrowLeft className="h-5 w-5" />
+                                        </button>
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-gray-900">Add Team - {event?.name}</h2>
+                                            <p className="text-sm text-gray-600">
+                                                Step 2 of 2: Add Team Members
+                                                <span className="block text-gray-500 mt-1">
+                                                    Team Leader: {addTeamModal.leaderProfile?.full_name} ({addTeamModal.leaderProfile?.roll_number})
+                                                </span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                                        <p><strong>Team Size:</strong> Min: {event?.min_team_size} | Max: {event?.max_team_size} (including leader)</p>
+                                        <p className="mt-1"><strong>Current:</strong> {addTeamModal.selectedMembers.length + 1} members ({addTeamModal.selectedMembers.length} + leader)</p>
+                                    </div>
+
+                                    {/* Search Member */}
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Add Team Members
+                                            <span className="block text-xs font-normal text-gray-500 mt-1">
+                                                Search by roll number and select members to add to the team
+                                            </span>
+                                        </label>
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={addTeamModal.memberSearch}
+                                                onChange={(e) => handleSearchTeamMembers(e.target.value)}
+                                                placeholder="Type roll number (e.g., 25AI111)"
+                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Search Results */}
+                                    {addTeamModal.memberSearch && addTeamModal.searchResults.length > 0 && (
+                                        <div className="mb-4 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                                            {addTeamModal.searchResults.map(profile => (
+                                                <button
+                                                    key={profile.id}
+                                                    onClick={() => handleSelectTeamMember(profile)}
+                                                    className="w-full p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 text-left transition"
+                                                >
+                                                    <p className="font-semibold text-gray-900">{profile.full_name} ({profile.roll_number})</p>
+                                                    <p className="text-sm text-gray-600">{profile.department || 'N/A'} • Year {profile.year_of_study || 'N/A'}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* No Results + Create Option */}
+                                    {addTeamModal.memberSearch && addTeamModal.searchResults.length === 0 && !addTeamModal.loading && !addTeamModal.creatingMemberInline && (
+                                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                            <p className="text-sm text-yellow-800 mb-3">⚠️ No results for "{addTeamModal.memberSearch}"</p>
+                                            <button
+                                                onClick={() => setAddTeamModal(prev => ({
+                                                    ...prev,
+                                                    creatingMemberInline: true,
+                                                    inlineCreateData: { rollNumber: addTeamModal.memberSearch, fullName: '', phone: '' }
+                                                }))}
+                                                className="px-4 py-2 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 transition text-sm"
+                                            >
+                                                Create New Profile
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Inline Create Member Form */}
+                                    {addTeamModal.creatingMemberInline && (
+                                        <div className="mb-4 p-4 bg-gray-50 border border-gray-300 rounded-lg">
+                                            <h3 className="font-semibold text-gray-900 mb-3">Create Profile for {addTeamModal.inlineCreateData.rollNumber}</h3>
+                                            <div className="space-y-3">
+                                                <input
+                                                    type="text"
+                                                    value={addTeamModal.inlineCreateData.fullName}
+                                                    onChange={(e) => setAddTeamModal(prev => ({
+                                                        ...prev,
+                                                        inlineCreateData: { ...prev.inlineCreateData, fullName: e.target.value }
+                                                    }))}
+                                                    placeholder="Full Name"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={addTeamModal.inlineCreateData.phone}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                                        setAddTeamModal(prev => ({
+                                                            ...prev,
+                                                            inlineCreateData: { ...prev.inlineCreateData, phone: value }
+                                                        }))
+                                                    }}
+                                                    placeholder="Phone (10 digits)"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleCreateInlineMember}
+                                                        disabled={addTeamModal.loading}
+                                                        className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition text-sm disabled:bg-gray-400"
+                                                    >
+                                                        {addTeamModal.loading ? 'Creating...' : 'Create & Add to Team'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setAddTeamModal(prev => ({
+                                                            ...prev,
+                                                            creatingMemberInline: false,
+                                                            inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                                        }))}
+                                                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition text-sm"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Selected Members List */}
+                                    {addTeamModal.selectedMembers.length > 0 && (
+                                        <div className="mb-4">
+                                            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                                                Selected Members ({addTeamModal.selectedMembers.length}/{event?.max_team_size - 1}):
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {addTeamModal.selectedMembers.map(member => (
+                                                    <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                                        <div>
+                                                            <p className="font-semibold text-gray-900">✓ {member.full_name} ({member.roll_number})</p>
+                                                            <p className="text-sm text-gray-600">{member.phone || 'No phone'}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRemoveTeamMember(member.id)}
+                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Minimum Size Warning */}
+                                    {addTeamModal.selectedMembers.length + 1 < event?.min_team_size && (
+                                        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                            <p className="text-sm text-yellow-800">
+                                                ⚠️ Minimum {event?.min_team_size} members required (including leader). 
+                                                Add {event?.min_team_size - addTeamModal.selectedMembers.length - 1} more member(s).
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Error Display */}
+                                    {addTeamModal.error && (
+                                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                            <p className="text-sm text-red-800">{addTeamModal.error}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={handleRegisterTeam}
+                                            disabled={
+                                                addTeamModal.loading || 
+                                                addTeamModal.selectedMembers.length + 1 < event?.min_team_size ||
+                                                addTeamModal.selectedMembers.length + 1 > event?.max_team_size
+                                            }
+                                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                        >
+                                            {addTeamModal.loading ? 'Registering...' : 'Register Team'}
+                                        </button>
+                                        <button
+                                            onClick={() => setAddTeamModal({
+                                                isOpen: false,
+                                                step: 1,
+                                                leaderRollNumber: '',
+                                                leaderProfile: null,
+                                                memberSearch: '',
+                                                searchResults: [],
+                                                selectedMembers: [],
+                                                loading: false,
+                                                error: null,
+                                                creatingMemberInline: false,
+                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                            })}
+                                            disabled={addTeamModal.loading}
+                                            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

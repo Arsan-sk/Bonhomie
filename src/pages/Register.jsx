@@ -90,6 +90,22 @@ export default function Register() {
         try {
             const { full_name, email, password, confirmPassword, ...profileData } = data;
 
+            // Check if this roll number belongs to an admin-created profile (offline registration)
+            const { data: adminProfileCheck, error: checkError } = await supabase.rpc('check_admin_created_profile', {
+                p_roll_number: profileData.roll_number
+            });
+
+            if (!checkError && adminProfileCheck && adminProfileCheck.exists && adminProfileCheck.is_admin_created) {
+                // This profile was created by admin for offline registration
+                setError(
+                    "📋 Your profile was already created by the admin for offline registration.\n\n" +
+                    "Please contact the Bonhomie admin/coordinator to get your login credentials or to link your account.\n\n" +
+                    "Name on file: " + (adminProfileCheck.full_name || "N/A")
+                );
+                setIsLoading(false);
+                return;
+            }
+
             const { data: authData, error: authError } = await signUp(email, password, {
                 full_name,
                 role: "student",
