@@ -23,7 +23,7 @@ import clsx from 'clsx'
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Events', href: '/admin/events', icon: Calendar },
-    { name: 'Advanced Search', href: '/admin/advanced-search', icon: Search },
+    { name: 'Advanced Management', href: '/admin/advanced-management', icon: Search },
     { name: 'Coordinators', href: '/admin/coordinators', icon: Users },
     { name: 'Users', href: '/admin/users', icon: GraduationCap },
     { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },

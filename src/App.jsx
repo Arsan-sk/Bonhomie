@@ -36,7 +36,7 @@ import AdminDashboard from './pages/dashboards/AdminDashboard'
 import AdminStats from './pages/dashboards/AdminStats'
 import AdminShell from './components/admin/layout/AdminShell'
 import AdminEvents from './pages/admin/AdminEvents'
-import AdminAdvancedSearch from './pages/admin/AdminAdvancedSearch'
+import AdminAdvancedManagement from './pages/admin/AdminAdvancedManagement'
 import AdminCoordinators from './pages/admin/AdminCoordinators'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminPayments from './pages/admin/AdminPayments'
@@ -92,7 +92,8 @@ function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="stats" element={<AdminStats />} />
           <Route path="events" element={<AdminEvents />} />
-          <Route path="advanced-search" element={<AdminAdvancedSearch />} />
+          <Route path="advanced-management" element={<AdminAdvancedManagement />} />
+          <Route path="advanced-management/event/:id" element={<CoordinatorEventManage />} />
           <Route path="coordinators" element={<AdminCoordinators />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="payments" element={<AdminPayments />} />
