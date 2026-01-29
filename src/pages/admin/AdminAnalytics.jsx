@@ -268,17 +268,20 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                 </div>
                 <p className="text-4xl font-bold mb-4">{stats.totalRegistrations}</p>
                 <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Confirmed</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.confirmed}</div>
+                  {/* Confirmed */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-green-500/30 hover:scale-105 transition-all duration-200 cursor-pointer">
+                    <div className="text-xs opacity-75">Confirmed</div>
+                    <div className="text-lg font-bold text-green-300">{stats.statusBreakdown.confirmed}</div>
                   </div>
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Pending</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.pending}</div>
+                  {/* Pending */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-yellow-400/30 hover:scale-105 transition-all duration-200 cursor-pointer">
+                    <div className="text-xs opacity-75">Pending</div>
+                    <div className="text-lg font-bold text-yellow-300">{stats.statusBreakdown.pending}</div>
                   </div>
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Rejected</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.rejected}</div>
+                  {/* Rejected */}
+                  <div className="bg-white/10 backdrop-blur-sm rounded px-2 py-1.5 hover:bg-red-500/30 hover:scale-105 transition-all duration-200 cursor-pointer">
+                    <div className="text-xs opacity-75">Rejected</div>
+                    <div className="text-lg font-bold text-red-300">{stats.statusBreakdown.rejected}</div>
                   </div>
                 </div>
               </div>
