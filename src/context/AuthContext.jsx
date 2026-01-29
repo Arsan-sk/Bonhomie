@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
     const fetchProfile = async (userId) => {
         try {
             console.log('Fetching profile for userId:', userId)
-            
+
             // First try to fetch by profile.id = userId (self-registered users)
             let { data, error } = await supabase
                 .from('profiles')
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
                     .select('*')
                     .eq('auth_user_id', userId)
                     .maybeSingle()
-                
+
                 data = result.data
                 error = result.error
                 console.log('Method 2 (by auth_user_id):', data ? 'Found' : 'Not found')
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
                         .select('*')
                         .eq('college_email', authUser.email)
                         .maybeSingle()
-                    
+
                     data = result.data
                     error = result.error
                     console.log('Method 3 (by email):', data ? 'Found' : 'Not found', error ? 'Error:' + error.message : '')
@@ -84,6 +84,14 @@ export const AuthProvider = ({ children }) => {
                 console.error('Error fetching profile:', error)
             } else if (data) {
                 console.log('Profile found:', data.college_email, data.full_name)
+
+                // Validate profile has required fields
+                if (!data.full_name || data.full_name.trim() === '' || data.full_name === 'New User') {
+                    console.warn('⚠️ Profile has empty or default full_name:', data.full_name)
+                    console.warn('This user may have been affected by the registration bug.')
+                    console.warn('User should contact admin or logout/login after database fix is applied.')
+                }
+
                 setProfile(data)
 
                 // Fetch assigned events for coordinators
@@ -97,6 +105,8 @@ export const AuthProvider = ({ children }) => {
                         setAssignedEventIds(assignments.map(a => a.event_id))
                     }
                 }
+            } else {
+                console.error('Profile not found for user:', userId)
             }
         } catch (error) {
             console.error('Error:', error)
@@ -112,7 +122,7 @@ export const AuthProvider = ({ children }) => {
             setUser(null)
             setProfile(null)
             setAssignedEventIds([])
-            
+
             // Then try to sign out from Supabase
             const { error } = await supabase.auth.signOut()
             if (error) {

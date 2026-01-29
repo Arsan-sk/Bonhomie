@@ -128,7 +128,7 @@ export default function StudentDashboard() {
                                 </div>
                                 <div>
                                     <h1 className="text-3xl font-bold text-white">
-                                        Welcome back, {profile?.full_name?.split(' ')[0] || 'Student'}!
+                                        Welcome back, {profile?.full_name?.trim() ? profile.full_name.split(' ')[0] : 'Student'}!
                                     </h1>
                                     <p className="text-purple-100 text-sm mt-1">
                                         {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
