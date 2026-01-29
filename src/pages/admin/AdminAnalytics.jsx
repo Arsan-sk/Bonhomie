@@ -1,38 +1,15 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
+import { TrendingUp, Users, Award, DollarSign, Calendar, Activity, Download } from "lucide-react";
 import {
-  TrendingUp,
-  Users,
-  Award,
-  DollarSign,
-  Calendar,
-  Activity,
-  Download,
-  Smartphone,
-} from "lucide-react";
-
-// --- INTERNAL CSV UTILITIES ---
-const downloadCSV = (csvString, fileName) => {
-  const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${fileName}_${new Date().toLocaleDateString()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-const arrayToCSV = data => {
-  if (!data.length) return "";
-  const headers = Object.keys(data[0]).join(",");
-  const rows = data.map(row =>
-    Object.values(row)
-      .map(value => `"${value}"`)
-      .join(",")
-  );
-  return [headers, ...rows].join("\n");
-};
+  generateIndividualParticipantsCSV,
+  generateTeamParticipantsCSV,
+  generatePaymentCSV,
+  generateNBACSV,
+  arrayToCSV,
+  downloadCSV,
+  getFormattedDate,
+} from "../../utils/csvExport";
 
 export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter = null }) {
   const [activeTab, setActiveTab] = useState("participation");
@@ -40,6 +17,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const [selectedEvent, setSelectedEvent] = useState(eventIdFilter || null);
   const [events, setEvents] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportType, setExportType] = useState("individual");
 
   const [stats, setStats] = useState({
     totalRegistrations: 0,
@@ -72,7 +50,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
 
   const fetchParticipationStats = async () => {
     try {
-      setLoading(true);
+      setLoading(true); // Start Loading
       const getCountByStatus = async (status = null) => {
         let q = supabase.from("registrations").select("id", { count: "exact", head: true });
         if (selectedEvent) q = q.eq("event_id", selectedEvent);
@@ -93,6 +71,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
       const step = 1000;
       let hasMore = true;
 
+      // Recursive Loop: Wait for ALL data before moving on
       while (hasMore) {
         let query = supabase
           .from("registrations")
@@ -144,7 +123,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     } catch (error) {
       console.error("Error fetching participation stats:", error);
     } finally {
-      setLoading(false);
+      setLoading(false); // Only stop loading when ALL loops are finished
     }
   };
 
@@ -177,6 +156,18 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
       const eventRevenue = {};
 
       allData.forEach(reg => {
+        const isLeader = reg.team_members && reg.team_members.length > 0;
+        let isTeamMember = false;
+        if (!isLeader && reg.profile_id && reg.event?.id) {
+          isTeamMember = allData.some(
+            otherReg =>
+              otherReg.event?.id === reg.event.id &&
+              otherReg.team_members &&
+              otherReg.team_members.length > 0 &&
+              otherReg.team_members.some(member => member.id === reg.profile_id)
+          );
+        }
+        if (isTeamMember) return;
         const fee = reg.event?.fee || 0;
         totalRevenue += fee;
         const mode = reg.payment_mode || "hybrid";
@@ -199,84 +190,28 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     }
   };
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      let query = supabase
-        .from("registrations")
-        .select(
-          `status, payment_mode, transaction_id, profile:profiles(full_name, email, phone, department), event:events(name)`
-        )
-        .eq("status", "confirmed");
-      if (selectedEvent) query = query.eq("event_id", selectedEvent);
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const csvData = data.map(row => ({
-        Name: row.profile?.full_name || "N/A",
-        Email: row.profile?.email || "N/A",
-        Department: row.profile?.department || "N/A",
-        Event: row.event?.name || "N/A",
-        Payment: row.payment_mode,
-        Transaction_ID: row.transaction_id || "N/A",
-      }));
-
-      downloadCSV(arrayToCSV(csvData), "Bonhomie_Registrations");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // --- THE DEEP LINK TEST BUTTON (NO SUCCESS MESSAGE) ---
-  const handleTestUPI = () => {
-    const pa = "paytmqr1sir6vusjw@paytm";
-    const am = "1.00";
-    const tn = encodeURIComponent("Vlog Registration Test");
-
-    // tr is the Transaction Ref ID - Mandatory for authorization
-    const tr = `TEST${Date.now()}`;
-
-    // mam is the Minimum Amount - matching this to 'am' helps prevent debit errors
-    // No 'pn' (name) added as per your request - the app will find it.
-    const upiLink = `upi://pay?pa=${pa}&am=${am}&mam=${am}&tn=${tn}&tr=${tr}&cu=INR`;
-
-    window.location.href = upiLink;
-  };
-
   return (
-    <div className="max-w-7xl mx-auto p-4">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div className="max-w-7xl mx-auto">
+      {/* Header with Selector */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-          <p className="text-sm text-gray-600 mt-1">Deep Linking & Participation Stats</p>
+          <p className="text-sm text-gray-600 mt-1">Comprehensive insights for Bonhomie 2026</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Deep Link Button */}
-          <button
-            onClick={handleTestUPI}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg font-bold text-sm shadow-md transition-all active:scale-95"
-          >
-            <Smartphone className="h-4 w-4" /> Test Deep Link (₹30)
-          </button>
-
           <select
             value={selectedEvent || ""}
             onChange={e => setSelectedEvent(e.target.value || null)}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
           >
-            <option value="">All Events</option>
+            <option value="">All Events (Global)</option>
             {events.map(event => (
               <option key={event.id} value={event.id}>
                 {event.name}
               </option>
             ))}
           </select>
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium text-sm"
-          >
+          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
             <Download className="h-4 w-4" /> Export
           </button>
         </div>
@@ -289,27 +224,209 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             onClick={() => setActiveTab("participation")}
             className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "participation" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
           >
-            Participation
+            Participation Analytics
           </button>
           <button
             onClick={() => setActiveTab("payment")}
             className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "payment" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
           >
-            Payments
+            Payment Analytics
           </button>
         </nav>
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-400">Loading Data...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-6 border rounded-lg shadow-sm">
-            <p className="text-gray-500 text-sm">Total Registrations</p>
-            <h2 className="text-3xl font-bold">{stats.totalRegistrations}</h2>
-          </div>
-          {/* ... other stats containers ... */}
+        <div className="flex items-center justify-center h-64 text-gray-500 animate-pulse">
+          Loading Analytics Data...
         </div>
+      ) : (
+        <>
+          {activeTab === "participation" && (
+            <div className="space-y-6">
+              {/* Metrics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-6 text-white relative overflow-hidden shadow-md">
+                  <div className="relative">
+                    <p className="text-sm opacity-90">Total Registrations</p>
+                    <p className="text-4xl font-bold mb-4">{stats.totalRegistrations}</p>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="bg-white/10 rounded py-1">
+                        Confirmed
+                        <br />
+                        <b>{stats.statusBreakdown.confirmed}</b>
+                      </div>
+                      <div className="bg-white/10 rounded py-1">
+                        Pending
+                        <br />
+                        <b>{stats.statusBreakdown.pending}</b>
+                      </div>
+                      <div className="bg-white/10 rounded py-1">
+                        Rejected
+                        <br />
+                        <b>{stats.statusBreakdown.rejected}</b>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Most Popular</p>
+                      <p className="text-lg font-semibold truncate">
+                        {stats.eventPopularity[0]?.name || "N/A"}
+                      </p>
+                    </div>
+                    <TrendingUp className="h-10 w-10 text-green-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Active Depts</p>
+                      <p className="text-3xl font-bold">
+                        {Object.keys(stats.departmentBreakdown).length}
+                      </p>
+                    </div>
+                    <Activity className="h-10 w-10 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Gender and Dept Breakdown */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-900">Gender Distribution</h3>
+                  {Object.entries(stats.genderBreakdown).map(([gender, count]) => (
+                    <div key={gender} className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium capitalize w-20">{gender}</span>
+                      <div className="flex-1 mx-4 bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-indigo-600 h-2 rounded-full"
+                          style={{ width: `${(count / stats.totalRegistrations) * 100}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-semibold">{count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-900">Dept Breakdown</h3>
+                  <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {Object.entries(stats.departmentBreakdown)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([dept, count]) => (
+                        <div key={dept} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-700">{dept}</span>
+                          <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold">
+                            {count}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* SCROLLABLE EVENT RANKING WITH STACKED GENDER BARS */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Event Registration Ranking
+                </h3>
+                <div className="space-y-6 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+                  {stats.eventPopularity.map((event, index) => {
+                    const malePct = (event.male / event.count) * 100;
+                    const femalePct = (event.female / event.count) * 100;
+                    return (
+                      <div key={event.name} className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center text-sm mb-1 font-medium">
+                          <span>
+                            {index + 1}. {event.name}
+                          </span>
+                          <span className="text-indigo-600 font-bold">{event.count}</span>
+                        </div>
+                        <div
+                          className="relative w-full bg-gray-100 rounded-full h-7 flex overflow-hidden shadow-inner border border-gray-200"
+                          style={{
+                            width: `${Math.max((event.count / stats.eventPopularity[0].count) * 100, 5)}%`,
+                          }}
+                        >
+                          {event.male > 0 && (
+                            <div
+                              className="bg-blue-500 h-full flex items-center justify-center text-[10px] text-white font-bold transition-all min-w-[20px]"
+                              style={{ width: `${Math.max(malePct, 5)}%` }}
+                            >
+                              M:{event.male}
+                            </div>
+                          )}
+                          {event.female > 0 && (
+                            <div
+                              className="bg-pink-500 h-full flex items-center justify-center text-[10px] text-white font-bold border-l border-white/20 transition-all min-w-[20px]"
+                              style={{ width: `${Math.max(femalePct, 5)}%` }}
+                            >
+                              F:{event.female}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "payment" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white shadow-lg">
+                  <p className="text-sm opacity-90 font-medium">Total Revenue</p>
+                  <p className="text-4xl font-bold mt-2">
+                    ₹{paymentStats.totalRevenue.toLocaleString()}
+                  </p>
+                </div>
+                {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amount]) => (
+                  <div
+                    key={mode}
+                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                  >
+                    <p className="text-sm text-gray-600 capitalize font-medium">{mode} Payments</p>
+                    <p className="text-2xl font-bold mt-2 text-gray-900">
+                      ₹{amount.toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 font-semibold text-gray-900">
+                  Event Revenue Ranking
+                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr className="text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3">Rank</th>
+                      <th className="px-6 py-3">Event Name</th>
+                      <th className="px-6 py-3 text-right">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                    {paymentStats.eventRevenue.map((event, index) => (
+                      <tr key={event.name} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-gray-400">#{index + 1}</td>
+                        <td className="px-6 py-4 font-medium text-gray-900">{event.name}</td>
+                        <td className="px-6 py-4 font-bold text-green-600 text-right">
+                          ₹{event.revenue.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
