@@ -11,7 +11,7 @@ import {
   Smartphone,
 } from "lucide-react";
 
-// --- INTERNAL CSV UTILITIES (Integrated to keep in one file) ---
+// --- INTERNAL CSV UTILITIES ---
 const downloadCSV = (csvString, fileName) => {
   const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
@@ -179,18 +179,6 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
       const eventRevenue = {};
 
       allData.forEach(reg => {
-        const isLeader = reg.team_members && reg.team_members.length > 0;
-        let isTeamMember = false;
-        if (!isLeader && reg.profile_id && reg.event?.id) {
-          isTeamMember = allData.some(
-            otherReg =>
-              otherReg.event?.id === reg.event.id &&
-              otherReg.team_members &&
-              otherReg.team_members.length > 0 &&
-              otherReg.team_members.some(member => member.id === reg.profile_id)
-          );
-        }
-        if (isTeamMember) return;
         const fee = reg.event?.fee || 0;
         totalRevenue += fee;
         const mode = reg.payment_mode || "hybrid";
@@ -246,35 +234,34 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     }
   };
 
-  // --- UPI TEST LOGIC ---
+  // --- UPDATED UPI TEST LOGIC TO FIX DEBIT ERROR ---
   const handleTestUPI = () => {
     const pa = "paytmqr1sir6vusjw@paytm";
-    const pn = encodeURIComponent("Datanexus Club");
     const am = "1.00";
     const tn = encodeURIComponent("registration for test");
-    const upiLink = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&tn=${tn}&mc=0000&cu=INR`;
+    const tr = `TR${Math.floor(Math.random() * 1000000)}`; // Added mandatory TR to fix debit error
+
+    // Constructing link without 'pn' (Name) as requested; App will fetch name from bank records
+    const upiLink = `upi://pay?pa=${pa}&am=${am}&tn=${tn}&tr=${tr}&mc=0000&cu=INR`;
+
     window.location.href = upiLink;
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header with Event Selector */}
-      <div className="mb-6 flex items-center justify-between">
+    <div className="max-w-7xl mx-auto p-4">
+      {/* Header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Comprehensive insights into registrations and revenue
-          </p>
+          <p className="text-sm text-gray-600 mt-1">Bonhomie 2026 Participation & Revenue</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* New Test UPI Button */}
           <button
             onClick={handleTestUPI}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium text-sm transition-colors"
           >
-            <Smartphone className="h-4 w-4" /> Test UPI DeepLink
+            <Smartphone className="h-4 w-4" /> Test UPI DeepLink2
           </button>
-
           <select
             value={selectedEvent || ""}
             onChange={e => setSelectedEvent(e.target.value || null)}
@@ -287,21 +274,10 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
               </option>
             ))}
           </select>
-          {activeTab === "participation" && (
-            <select
-              value={exportType}
-              onChange={e => setExportType(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
-            >
-              <option value="individual">Individual Events</option>
-              <option value="group">Group Events</option>
-              <option value="nba">NBA</option>
-            </select>
-          )}
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium text-sm transition-colors"
           >
             <Download className="h-4 w-4" /> {isExporting ? "Exporting..." : "Export"}
           </button>
@@ -316,7 +292,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "participation" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
           >
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" /> Participation Analytics
+              <Users className="h-5 w-5" /> Participation
             </div>
           </button>
           <button
@@ -324,210 +300,102 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "payment" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
           >
             <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" /> Payment Analytics
+              <DollarSign className="h-5 w-5" /> Payment
             </div>
           </button>
         </nav>
       </div>
 
-      {activeTab === "participation" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-6 text-white relative overflow-hidden">
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
+      {loading ? (
+        <div className="flex justify-center items-center py-20 text-gray-500 font-medium">
+          Loading Statistics...
+        </div>
+      ) : (
+        <>
+          {activeTab === "participation" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-6 text-white shadow-lg relative overflow-hidden">
                   <p className="text-sm opacity-90">Total Registrations</p>
-                  <Users className="h-8 w-8 opacity-75" />
-                </div>
-                <p className="text-4xl font-bold mb-4">{stats.totalRegistrations}</p>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Confirmed</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.confirmed}</div>
-                  </div>
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Pending</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.pending}</div>
-                  </div>
-                  <div className="bg-white/10 rounded px-2 py-1.5">
-                    <div className="text-xs">Rejected</div>
-                    <div className="text-lg font-bold">{stats.statusBreakdown.rejected}</div>
+                  <p className="text-4xl font-bold mt-2">{stats.totalRegistrations}</p>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px]">
+                    <div className="bg-white/10 rounded p-1">
+                      Conf: {stats.statusBreakdown.confirmed}
+                    </div>
+                    <div className="bg-white/10 rounded p-1">
+                      Pend: {stats.statusBreakdown.pending}
+                    </div>
+                    <div className="bg-white/10 rounded p-1">
+                      Rej: {stats.statusBreakdown.rejected}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Most Popular Event</p>
-                  <p className="text-lg font-semibold text-gray-900 mt-2 truncate">
-                    {stats.eventPopularity[0]?.name || "N/A"}
-                  </p>
+                <div className="bg-white rounded-lg border p-6 flex items-center justify-between shadow-sm">
+                  <div>
+                    <p className="text-sm text-gray-500">Popular Event</p>
+                    <p className="text-lg font-bold truncate max-w-[150px]">
+                      {stats.eventPopularity[0]?.name || "N/A"}
+                    </p>
+                  </div>
+                  <TrendingUp className="text-green-500 h-10 w-10" />
                 </div>
-                <TrendingUp className="h-10 w-10 text-green-600" />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Active Departments</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {Object.keys(stats.departmentBreakdown).length}
-                  </p>
+                <div className="bg-white rounded-lg border p-6 flex items-center justify-between shadow-sm">
+                  <div>
+                    <p className="text-sm text-gray-500">Active Depts</p>
+                    <p className="text-3xl font-bold">
+                      {Object.keys(stats.departmentBreakdown).length}
+                    </p>
+                  </div>
+                  <Activity className="text-purple-500 h-10 w-10" />
                 </div>
-                <Activity className="h-10 w-10 text-purple-600" />
               </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Gender Distribution</h3>
-              <div className="space-y-3">
-                {Object.entries(stats.genderBreakdown).map(([gender, count]) => (
-                  <div key={gender} className="flex items-center justify-between">
-                    <span className="text-sm font-medium capitalize">{gender}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="w-32 bg-gray-200 rounded-full h-2">
+              <div className="bg-white border rounded-lg p-6 shadow-sm">
+                <h3 className="font-bold text-gray-900 mb-4 border-b pb-2">
+                  Event Registration Ranking
+                </h3>
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {stats.eventPopularity.map((event, i) => (
+                    <div key={i} className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500 font-bold w-6">#{i + 1}</span>
+                        <span className="flex-1 ml-2 font-medium text-gray-700">{event.name}</span>
+                        <span className="font-bold text-indigo-600">{event.count}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-indigo-600 h-2 rounded-full"
+                          className="bg-indigo-500 h-full"
                           style={{
-                            width: `${stats.totalRegistrations ? (count / stats.totalRegistrations) * 100 : 0}%`,
+                            width: `${(event.count / stats.eventPopularity[0].count) * 100}%`,
                           }}
                         ></div>
                       </div>
-                      <span className="text-sm font-semibold w-12 text-right">{count}</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "payment" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg p-6 shadow-lg">
+                  <p className="text-sm opacity-90">Total Revenue</p>
+                  <p className="text-3xl font-bold mt-2">
+                    ₹{paymentStats.totalRevenue.toLocaleString()}
+                  </p>
+                </div>
+                {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amt]) => (
+                  <div key={mode} className="bg-white border rounded-lg p-6 shadow-sm">
+                    <p className="text-sm text-gray-500 capitalize">{mode} Mode</p>
+                    <p className="text-xl font-bold text-gray-800 mt-1">₹{amt.toLocaleString()}</p>
                   </div>
                 ))}
               </div>
             </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Department Breakdown</h3>
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                {Object.entries(stats.departmentBreakdown)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([dept, count]) => (
-                    <div key={dept} className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{dept}</span>
-                      <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-sm font-semibold">
-                        {count}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-
-          {stats.eventPopularity.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Event Registration Ranking
-              </h3>
-              <div className="space-y-6 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
-                {stats.eventPopularity.map((event, index) => {
-                  const malePct = event.count > 0 ? (event.male / event.count) * 100 : 0;
-                  const femalePct = event.count > 0 ? (event.female / event.count) * 100 : 0;
-                  const otherPct = event.count > 0 ? (event.other / event.count) * 100 : 0;
-                  return (
-                    <div key={event.name} className="flex flex-col gap-1">
-                      <div className="flex justify-between items-center text-sm mb-1">
-                        <span className="font-bold text-gray-400 w-6">{index + 1}</span>
-                        <span className="flex-1 font-medium text-gray-700 ml-2">{event.name}</span>
-                        <span className="font-bold text-indigo-600">{event.count}</span>
-                      </div>
-                      <div
-                        className="relative w-full bg-gray-100 rounded-full h-7 flex overflow-hidden shadow-inner border border-gray-200"
-                        style={{
-                          width: `${Math.max((event.count / stats.eventPopularity[0].count) * 100, 5)}%`,
-                        }}
-                      >
-                        <div
-                          className="bg-blue-500 h-full flex items-center justify-center text-[10px] text-white font-bold transition-all duration-500 min-w-[20px]"
-                          style={{ width: `${event.male > 0 ? Math.max(malePct, 5) : 0}%` }}
-                        >
-                          M:{event.male}
-                        </div>
-                        <div
-                          className="bg-pink-500 h-full flex items-center justify-center text-[10px] text-white font-bold border-l border-white/20 transition-all duration-500 min-w-[20px]"
-                          style={{ width: `${event.female > 0 ? Math.max(femalePct, 5) : 0}%` }}
-                        >
-                          F:{event.female}
-                        </div>
-                        {event.other > 0 && (
-                          <div
-                            className="bg-gray-400 h-full flex items-center justify-center text-[10px] text-white font-bold border-l border-white/20 min-w-[20px]"
-                            style={{ width: `${otherPct}%` }}
-                          >
-                            O:{event.other}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
-        </div>
-      )}
-
-      {activeTab === "payment" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white shadow-lg">
-              <p className="text-sm opacity-90">Total Revenue</p>
-              <p className="text-4xl font-bold mt-2">
-                ₹{paymentStats.totalRevenue.toLocaleString()}
-              </p>
-            </div>
-            {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amount]) => (
-              <div key={mode} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <p className="text-sm text-gray-600 capitalize">{mode} Payments</p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">₹{amount.toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Event Revenue Ranking</h3>
-            </div>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Rank
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Event Name
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Revenue
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paymentStats.eventRevenue.map((event, index) => (
-                  <tr key={event.name} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-400">
-                      #{index + 1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {event.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 text-right">
-                      ₹{event.revenue.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
