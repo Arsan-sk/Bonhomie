@@ -105,6 +105,26 @@ export const AuthProvider = ({ children }) => {
         }
     }
 
+    // Improved signOut that handles errors gracefully
+    const handleSignOut = async () => {
+        try {
+            // Clear local state first
+            setUser(null)
+            setProfile(null)
+            setAssignedEventIds([])
+            
+            // Then try to sign out from Supabase
+            const { error } = await supabase.auth.signOut()
+            if (error) {
+                console.warn('SignOut warning (can be ignored):', error.message)
+            }
+        } catch (err) {
+            // Even if signOut fails, user is logged out locally
+            console.warn('SignOut error (can be ignored):', err)
+        }
+        return { error: null }
+    }
+
     const value = {
         user,
         profile,
@@ -115,7 +135,7 @@ export const AuthProvider = ({ children }) => {
         isStudent: profile?.role === 'student',
         signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
         signUp: (email, password, metaData) => supabase.auth.signUp({ email, password, options: { data: metaData } }),
-        signOut: () => supabase.auth.signOut(),
+        signOut: handleSignOut,
     }
 
     return (

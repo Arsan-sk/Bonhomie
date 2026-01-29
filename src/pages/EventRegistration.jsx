@@ -26,7 +26,7 @@ export default function EventRegistration() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -168,13 +168,16 @@ export default function EventRegistration() {
     setError("");
 
     try {
+      // Use profile.id (not user.id) for admin-created profiles
+      const profileId = profile?.id || user.id;
+      
       // 🔒 DUPLICATE REGISTRATION CHECK
       // Check if current user is already registered for this event
       const { data: existingUserReg, error: userCheckError } = await supabase
         .from("registrations")
         .select("id")
         .eq("event_id", event.id)
-        .eq("profile_id", user.id)
+        .eq("profile_id", profileId)
         .maybeSingle();
 
       if (userCheckError) throw userCheckError;
@@ -213,7 +216,7 @@ export default function EventRegistration() {
       // Upload screenshot only for hybrid mode
       if (paymentMode === "hybrid" && file) {
         const fileExt = file.name.split(".").pop();
-        const fileName = `${user.id}/${event.id}_${Date.now()}.${fileExt}`;
+        const fileName = `${profileId}/${event.id}_${Date.now()}.${fileExt}`;
         const { error: uploadError, data: uploadData } = await supabase.storage
           .from("payment_proofs")
           .upload(fileName, file);
@@ -224,7 +227,7 @@ export default function EventRegistration() {
 
       // 1. Create LEADER registration
       const { error: leaderError } = await supabase.from("registrations").insert({
-        profile_id: user.id, // LEADER
+        profile_id: profileId, // LEADER - use profile.id not user.id
         event_id: event.id,
         transaction_id: data.transaction_id || null,
         payment_screenshot_path: paymentScreenshotPath,

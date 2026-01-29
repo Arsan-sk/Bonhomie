@@ -98,13 +98,14 @@ export default function ProfilePage({ profileId, role, isViewOnly = false }) {
             })
 
             // Fetch registrations for stats and participated events
+            // Use actualProfileId (profile.id), not targetProfileId (which might be auth user id)
             const { data: registrations, error: regsError } = await supabase
                 .from('registrations')
                 .select(`
                     *,
                     event:events(id, name, category, day, image_path, subcategory)
                 `)
-                .eq('profile_id', targetProfileId)
+                .eq('profile_id', actualProfileId)
                 .order('registered_at', { ascending: false })
 
             if (regsError) throw regsError

@@ -12,7 +12,12 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (err) {
+      console.warn('Logout error (ignored):', err);
+    }
+    // Always navigate to login
     navigate("/login");
   };
 

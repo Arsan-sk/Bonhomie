@@ -10,7 +10,12 @@ export default function CoordinatorShell() {
     const location = useLocation()
 
     const handleSignOut = async () => {
-        await signOut()
+        try {
+            await signOut()
+        } catch (err) {
+            console.warn('Logout error (ignored):', err)
+        }
+        // Always navigate to login
         navigate('/login')
     }
 

@@ -15,22 +15,24 @@ export default function StudentDashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        if (user) {
+        if (user && profile) {
             fetchRegistrations()
             fetchCertificates()
             fetchNotifications()
         }
-    }, [user])
+    }, [user, profile])
 
     const fetchRegistrations = async () => {
         try {
+            // Use profile.id (not user.id) for admin-created profiles
+            const profileId = profile?.id || user.id
             const { data, error } = await supabase
                 .from('registrations')
                 .select(`
           *,
           event:events(*)
         `)
-                .eq('profile_id', user.id)
+                .eq('profile_id', profileId)
                 .order('registered_at', { ascending: false })
 
             if (error) throw error

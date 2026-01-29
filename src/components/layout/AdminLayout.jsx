@@ -36,7 +36,12 @@ export default function AdminLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
     const handleSignOut = async () => {
-        await signOut()
+        try {
+            await signOut()
+        } catch (err) {
+            console.warn('Logout error (ignored):', err)
+        }
+        // Always navigate to login
         navigate('/login')
     }
 

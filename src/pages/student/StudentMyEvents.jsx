@@ -7,7 +7,7 @@ import { getUnsplashImageUrl, getCategoryImage } from '../../utils/unsplashHelpe
 import StaticCardFallback from '../../components/ui/StaticCardFallback'
 
 export default function StudentMyEvents() {
-    const { user } = useAuth()
+    const { user, profile } = useAuth()
     const location = useLocation()
     const navigate = useNavigate()
     const [myRegistrations, setMyRegistrations] = useState([])
@@ -19,20 +19,22 @@ export default function StudentMyEvents() {
     const eventsBasePath = isCoordinator ? '/coordinator/browse-events' : '/student/events'
 
     useEffect(() => {
-        if (user) {
+        if (user && profile) {
             fetchMyEvents()
         }
-    }, [user])
+    }, [user, profile])
 
     const fetchMyEvents = async () => {
         try {
+            // Use profile.id (not user.id) for admin-created profiles
+            const profileId = profile?.id || user.id
             const { data, error } = await supabase
                 .from('registrations')
                 .select(`
                     *,
                     event:events(*)
                 `)
-                .eq('profile_id', user.id)
+                .eq('profile_id', profileId)
                 .order('registered_at', { ascending: false })
 
             if (error) throw error

@@ -12,7 +12,7 @@ export default function EventDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
     const location = useLocation()
-    const { user } = useAuth()
+    const { user, profile } = useAuth()
     const [event, setEvent] = useState(null)
     const [loading, setLoading] = useState(true)
     const [registration, setRegistration] = useState(null)
@@ -125,11 +125,13 @@ export default function EventDetail() {
         if (!user) return
 
         try {
+            // Use profile.id (not user.id) for admin-created profiles
+            const profileId = profile?.id || user.id
             const { data: regData } = await supabase
                 .from('registrations')
                 .select('*')
                 .eq('event_id', id)
-                .eq('profile_id', user.id)
+                .eq('profile_id', profileId)
                 .maybeSingle()
 
             setRegistration(regData)
