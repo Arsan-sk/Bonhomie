@@ -40,11 +40,45 @@ export default function Login() {
             const { data: { user: authUser } } = await supabase.auth.getUser()
             if (!authUser) throw new Error('User not found after login')
 
-            const { data: profileData, error: profileError } = await supabase
+            // Try fetching profile - first by id, then by auth_user_id, then by email
+            let profileData = null
+            let profileError = null
+
+            // 1. Try by profile.id = authUser.id (self-registered)
+            const result1 = await supabase
                 .from('profiles')
                 .select('role')
                 .eq('id', authUser.id)
-                .single()
+                .maybeSingle()
+            
+            if (result1.data) {
+                profileData = result1.data
+            } else if (!result1.error) {
+                // 2. Try by auth_user_id (offline profiles)
+                const result2 = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('auth_user_id', authUser.id)
+                    .maybeSingle()
+                
+                if (result2.data) {
+                    profileData = result2.data
+                } else if (!result2.error) {
+                    // 3. Try by email (fallback)
+                    const result3 = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('college_email', authUser.email)
+                        .maybeSingle()
+                    
+                    profileData = result3.data
+                    profileError = result3.error
+                } else {
+                    profileError = result2.error
+                }
+            } else {
+                profileError = result1.error
+            }
 
             if (profileError) {
                 console.error('Profile fetch error:', profileError)

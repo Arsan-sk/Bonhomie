@@ -44,11 +44,46 @@ export default function Profile() {
     const getProfile = async () => {
         try {
             setLoading(true)
-            const { data, error } = await supabase
+            
+            // Try fetching profile - first by id, then by auth_user_id, then by email
+            let data = null
+            let error = null
+
+            // 1. Try by profile.id = user.id (self-registered)
+            const result1 = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
-                .single()
+                .maybeSingle()
+            
+            if (result1.data) {
+                data = result1.data
+            } else if (!result1.error) {
+                // 2. Try by auth_user_id (offline profiles)
+                const result2 = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('auth_user_id', user.id)
+                    .maybeSingle()
+                
+                if (result2.data) {
+                    data = result2.data
+                } else if (!result2.error) {
+                    // 3. Try by email (fallback)
+                    const result3 = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('college_email', user.email)
+                        .maybeSingle()
+                    
+                    data = result3.data
+                    error = result3.error
+                } else {
+                    error = result2.error
+                }
+            } else {
+                error = result1.error
+            }
 
             if (error) {
                 throw error

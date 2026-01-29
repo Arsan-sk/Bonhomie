@@ -34,12 +34,61 @@ export default function ProfilePage({ profileId, role, isViewOnly = false }) {
         try {
             setLoading(true)
 
-            // Fetch profile from profiles table
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', targetProfileId)
-                .single()
+            let profileData = null
+            let profileError = null
+            let actualProfileId = targetProfileId
+
+            // If looking up own profile, try multiple lookup methods
+            if (isOwnProfile && user) {
+                // 1. Try by profile.id = user.id (self-registered)
+                const result1 = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .maybeSingle()
+                
+                if (result1.data) {
+                    profileData = result1.data
+                    actualProfileId = result1.data.id
+                } else if (!result1.error) {
+                    // 2. Try by auth_user_id (offline profiles)
+                    const result2 = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('auth_user_id', user.id)
+                        .maybeSingle()
+                    
+                    if (result2.data) {
+                        profileData = result2.data
+                        actualProfileId = result2.data.id
+                    } else if (!result2.error) {
+                        // 3. Try by email (fallback)
+                        const result3 = await supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('college_email', user.email)
+                            .maybeSingle()
+                        
+                        profileData = result3.data
+                        profileError = result3.error
+                        if (result3.data) actualProfileId = result3.data.id
+                    } else {
+                        profileError = result2.error
+                    }
+                } else {
+                    profileError = result1.error
+                }
+            } else {
+                // Looking up another user's profile - use direct ID lookup
+                const result = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', targetProfileId)
+                    .single()
+                
+                profileData = result.data
+                profileError = result.error
+            }
 
             if (profileError) throw profileError
             setProfile(profileData)
@@ -115,7 +164,7 @@ export default function ProfilePage({ profileId, role, isViewOnly = false }) {
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ avatar_url: finalAvatarUrl })
-                .eq('id', user.id)
+                .eq('id', profile.id)  // Use profile.id, not user.id (for offline profiles)
 
             if (updateError) throw updateError
 
@@ -141,7 +190,7 @@ export default function ProfilePage({ profileId, role, isViewOnly = false }) {
                     full_name: editForm.full_name,
                     phone: editForm.phone
                 })
-                .eq('id', user.id)
+                .eq('id', profile.id)  // Use profile.id, not user.id (for offline profiles)
 
             if (error) throw error
 

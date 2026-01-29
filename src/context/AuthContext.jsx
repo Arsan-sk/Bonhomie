@@ -39,15 +39,51 @@ export const AuthProvider = ({ children }) => {
 
     const fetchProfile = async (userId) => {
         try {
-            const { data, error } = await supabase
+            console.log('Fetching profile for userId:', userId)
+            
+            // First try to fetch by profile.id = userId (self-registered users)
+            let { data, error } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', userId)
-                .single()
+                .maybeSingle()
+
+            console.log('Method 1 (by id):', data ? 'Found' : 'Not found')
+
+            // If not found, try by auth_user_id (offline profiles linked to auth)
+            if (!data && !error) {
+                const result = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('auth_user_id', userId)
+                    .maybeSingle()
+                
+                data = result.data
+                error = result.error
+                console.log('Method 2 (by auth_user_id):', data ? 'Found' : 'Not found')
+            }
+
+            // If still not found, try by email (fallback)
+            if (!data && !error) {
+                const { data: { user: authUser } } = await supabase.auth.getUser()
+                console.log('Method 3 trying email:', authUser?.email)
+                if (authUser?.email) {
+                    const result = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('college_email', authUser.email)
+                        .maybeSingle()
+                    
+                    data = result.data
+                    error = result.error
+                    console.log('Method 3 (by email):', data ? 'Found' : 'Not found', error ? 'Error:' + error.message : '')
+                }
+            }
 
             if (error) {
                 console.error('Error fetching profile:', error)
-            } else {
+            } else if (data) {
+                console.log('Profile found:', data.college_email, data.full_name)
                 setProfile(data)
 
                 // Fetch assigned events for coordinators

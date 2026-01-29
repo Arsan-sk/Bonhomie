@@ -83,7 +83,7 @@ export default function CoordinatorShell() {
                             </button>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-white truncate">{profile?.full_name || 'Coordinator'}</p>
-                                <p className="text-xs text-purple-200 truncate">{profile?.college_email || 'coordinator@bonhomie.com'}</p>
+                                <p className="text-xs text-purple-200 truncate">{profile?.college_email || user?.email || 'No email'}</p>
                             </div>
                             <button
                                 onClick={handleSignOut}
