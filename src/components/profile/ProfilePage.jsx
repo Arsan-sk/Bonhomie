@@ -39,9 +39,16 @@ export default function ProfilePage({ profileId, role, isViewOnly = false }) {
                 .from('profiles')
                 .select('*')
                 .eq('id', targetProfileId)
-                .single()
+                .maybeSingle()
 
             if (profileError) throw profileError
+            
+            if (!profileData) {
+                setMessage({ type: 'error', text: 'Profile not found. Please try logging out and back in.' })
+                setLoading(false)
+                return
+            }
+            
             setProfile(profileData)
             setEditForm({
                 full_name: profileData.full_name || '',

@@ -48,7 +48,7 @@ export default function Profile() {
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
-                .single()
+                .maybeSingle()
 
             if (error) {
                 throw error
@@ -67,6 +67,9 @@ export default function Profile() {
                     phone: data.phone || '',
                     gender: data.gender || 'Male',
                 })
+            } else {
+                // No profile found - this shouldn't happen normally but handle it gracefully
+                setErrorMsg('Profile not found. Please contact support if this persists.')
             }
         } catch (error) {
             console.error('Error loading profile:', error)
