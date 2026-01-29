@@ -90,6 +90,80 @@ export default function Register() {
         try {
             const { full_name, email, password, confirmPassword, ...profileData } = data;
 
+            // ============================================================
+            // STEP 1: CHECK FOR DUPLICATES IN BOTH TABLES
+            // ============================================================
+
+            // Check if email exists in auth.users
+            const { data: existingAuthUser, error: authCheckError } = await supabase.rpc('check_email_exists', {
+                p_email: email
+            });
+
+            if (authCheckError) {
+                console.warn("Auth check error:", authCheckError);
+                // Continue anyway - backend will catch it
+            }
+
+            // Check if email exists in profiles
+            const { data: existingProfile, error: profileCheckError } = await supabase
+                .from('profiles')
+                .select('id, college_email')
+                .eq('college_email', email)
+                .maybeSingle();
+
+            if (profileCheckError) {
+                console.warn("Profile check error:", profileCheckError);
+                // Continue anyway - backend will catch it
+            }
+
+            // Check if roll number exists in profiles
+            const { data: existingRollProfile } = await supabase
+                .from('profiles')
+                .select('id, roll_number, college_email')
+                .ilike('roll_number', profileData.roll_number)
+                .maybeSingle();
+
+            // Check if roll number exists in auth.users metadata
+            const { data: authUsersWithRoll } = await supabase.rpc('check_roll_number_exists', {
+                p_roll_number: profileData.roll_number
+            });
+
+            // Validate results
+            if (existingAuthUser?.email_exists) {
+                setError("❌ This email is already registered in our system. Please login instead or use a different email.");
+                setIsLoading(false);
+                return;
+            }
+
+            if (existingProfile) {
+                setError("❌ This email is already registered. Please login instead or use a different email.");
+                setIsLoading(false);
+                return;
+            }
+
+            if (existingRollProfile) {
+                setError(
+                    `❌ Roll number ${profileData.roll_number} is already registered.\n\n` +
+                    `Email on file: ${existingRollProfile.college_email}\n\n` +
+                    `If this is your roll number, please contact admin or use your original email to login.`
+                );
+                setIsLoading(false);
+                return;
+            }
+
+            if (authUsersWithRoll?.roll_exists) {
+                setError(
+                    `❌ Roll number ${profileData.roll_number} is already registered in our system.\n\n` +
+                    `Please contact admin if this is your roll number.`
+                );
+                setIsLoading(false);
+                return;
+            }
+
+            // ============================================================
+            // STEP 2: CHECK ADMIN-CREATED PROFILES (Original check)
+            // ============================================================
+
             // Check if this roll number belongs to an admin-created profile (offline registration)
             const { data: adminProfileCheck, error: checkError } = await supabase.rpc('check_admin_created_profile', {
                 p_roll_number: profileData.roll_number
@@ -105,6 +179,10 @@ export default function Register() {
                 setIsLoading(false);
                 return;
             }
+
+            // ============================================================
+            // STEP 3: PROCEED WITH REGISTRATION (All checks passed)
+            // ============================================================
 
             const { data: authData, error: authError } = await signUp(email, password, {
                 full_name,
@@ -148,29 +226,29 @@ export default function Register() {
             const errorCode = err.code || "";
             const errorStatus = err.status || err.statusCode || "";
 
-            // Network and connection errors (common on mobile)
-            if (!navigator.onLine) {
+            // PRIORITY 1: Check for duplicate errors FIRST (most common issue)
+            if (errorText.includes("duplicate") ||
+                errorCode === "23505" ||
+                errorText.includes("already exists") ||
+                errorText.includes("already registered")) {
+
+                if (errorText.includes("roll") || errorText.includes("roll_number")) {
+                    errorMessage = "❌ This roll number is already registered. Please use a different roll number or contact admin if this is your roll number.";
+                } else if (errorText.includes("email") || errorText.includes("college_email")) {
+                    errorMessage = "❌ This email is already registered. Please login instead or use a different email.";
+                } else {
+                    errorMessage = "❌ Email or Roll Number already exists. Please use different credentials.";
+                }
+            }
+            // PRIORITY 2: Network and connection errors (common on mobile)
+            else if (!navigator.onLine) {
                 errorMessage = "🌐 No internet connection. Please check your network and try again.";
             } else if (errorText.includes("fetch") || errorText.includes("network") || errorText.includes("connection")) {
                 errorMessage = "🌐 Network error. Please check your internet connection and try again.";
             } else if (errorText.includes("timeout") || errorText.includes("timed out")) {
                 errorMessage = "⏱️ Request timed out. Please try again with a stable connection.";
             }
-            // Server errors
-            // Server errors - but check for specific messages first
-            else if (errorStatus === 500 || errorText.includes("internal server") || errorText.includes("server error")) {
-                // Check if it's actually a duplicate error masked as 500
-                if (errorText.includes("roll number") && errorText.includes("already registered")) {
-                    errorMessage = "❌ This roll number is already registered. Please use a different roll number or contact support.";
-                } else if (errorText.includes("email") && errorText.includes("already registered")) {
-                    errorMessage = "❌ This email is already registered. Please login instead or use a different email.";
-                } else {
-                    errorMessage = "❌ Server error. Please try again in a few moments.";
-                }
-            } else if (errorStatus === 503 || errorText.includes("service unavailable")) {
-                errorMessage = "❌ Service temporarily unavailable. Please try again later.";
-            }
-            // Specific error messages from database trigger
+            // PRIORITY 3: Specific error messages from database trigger
             else if (errorText.includes("roll number") && (errorText.includes("already registered") || errorText.includes("already exists"))) {
                 errorMessage = "❌ This roll number is already registered. Please use a different roll number or contact support if this is your roll number.";
             } else if (errorText.includes("email") && (errorText.includes("already registered") || errorText.includes("already exists"))) {
@@ -179,12 +257,19 @@ export default function Register() {
                 errorMessage = "❌ Invalid email domain. Only @aiktc.ac.in, @bonhomie.com, and @gmail.com emails are allowed.";
             } else if (errorText.includes("missing required information")) {
                 errorMessage = "❌ Please fill in all required fields and try again.";
-            }
-            // Generic duplicate errors
-            else if (errorText.includes("duplicate") || errorCode === "23505") {
-                errorMessage = "❌ Email or Roll Number already exists. Please use different credentials.";
             } else if (errorText.includes("user already registered")) {
                 errorMessage = "❌ Account already exists with this email. Try logging in instead.";
+            }
+            // PRIORITY 4: Server errors (check AFTER duplicate checks)
+            else if (errorStatus === 500 || errorText.includes("internal server") || errorText.includes("server error")) {
+                // Double-check if it's actually a duplicate error masked as 500
+                if (errorText.includes("roll number") || errorText.includes("email")) {
+                    errorMessage = "❌ Email or Roll Number already exists. Please use different credentials.";
+                } else {
+                    errorMessage = "❌ Server error. Please try again in a few moments.";
+                }
+            } else if (errorStatus === 503 || errorText.includes("service unavailable")) {
+                errorMessage = "❌ Service temporarily unavailable. Please try again later.";
             }
             // Rate limiting
             else if (errorText.includes("rate limit") || errorText.includes("too many") || errorStatus === 429) {
