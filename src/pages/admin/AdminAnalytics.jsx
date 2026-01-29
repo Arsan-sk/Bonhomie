@@ -1,15 +1,38 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { TrendingUp, Users, Award, DollarSign, Calendar, Activity, Download } from "lucide-react";
 import {
-  generateIndividualParticipantsCSV,
-  generateTeamParticipantsCSV,
-  generatePaymentCSV,
-  generateNBACSV,
-  arrayToCSV,
-  downloadCSV,
-  getFormattedDate,
-} from "../../utils/csvExport";
+  TrendingUp,
+  Users,
+  Award,
+  DollarSign,
+  Calendar,
+  Activity,
+  Download,
+  Smartphone,
+} from "lucide-react";
+
+// --- INTERNAL CSV UTILITIES (Integrated to keep in one file) ---
+const downloadCSV = (csvString, fileName) => {
+  const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${fileName}_${new Date().toLocaleDateString()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const arrayToCSV = data => {
+  if (!data.length) return "";
+  const headers = Object.keys(data[0]).join(",");
+  const rows = data.map(row =>
+    Object.values(row)
+      .map(value => `"${value}"`)
+      .join(",")
+  );
+  return [headers, ...rows].join("\n");
+};
 
 export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter = null }) {
   const [activeTab, setActiveTab] = useState("participation");
@@ -190,6 +213,49 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     }
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      let query = supabase
+        .from("registrations")
+        .select(
+          `status, payment_mode, transaction_id, profile:profiles(full_name, email, phone, department), event:events(name)`
+        )
+        .eq("status", "confirmed");
+
+      if (selectedEvent) query = query.eq("event_id", selectedEvent);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const csvData = data.map(row => ({
+        Name: row.profile?.full_name || "N/A",
+        Email: row.profile?.email || "N/A",
+        Department: row.profile?.department || "N/A",
+        Event: row.event?.name || "N/A",
+        Payment_Mode: row.payment_mode,
+        Transaction_ID: row.transaction_id || "N/A",
+      }));
+
+      const csvString = arrayToCSV(csvData);
+      downloadCSV(csvString, "Bonhomie_Registrations");
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // --- UPI TEST LOGIC ---
+  const handleTestUPI = () => {
+    const pa = "paytmqr1sir6vusjw@paytm";
+    const pn = encodeURIComponent("Datanexus Club");
+    const am = "1.00";
+    const tn = encodeURIComponent("registration for test");
+    const upiLink = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&tn=${tn}&mc=0000&cu=INR`;
+    window.location.href = upiLink;
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header with Event Selector */}
@@ -201,6 +267,14 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* New Test UPI Button */}
+          <button
+            onClick={handleTestUPI}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium text-sm"
+          >
+            <Smartphone className="h-4 w-4" /> Test UPI DeepLink
+          </button>
+
           <select
             value={selectedEvent || ""}
             onChange={e => setSelectedEvent(e.target.value || null)}
@@ -225,12 +299,11 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             </select>
           )}
           <button
-            onClick={() => {
-              /* Handler remains same as previous */
-            }}
+            onClick={handleExport}
+            disabled={isExporting}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium text-sm"
           >
-            <Download className="h-4 w-4" /> Export
+            <Download className="h-4 w-4" /> {isExporting ? "Exporting..." : "Export"}
           </button>
         </div>
       </div>
