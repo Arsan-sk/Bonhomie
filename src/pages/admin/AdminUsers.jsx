@@ -17,6 +17,14 @@ export default function AdminUsers() {
         college_email: '',
         gender: 'male' // Default to male
     })
+    // Stats - total counts from database (not filtered)
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        admins: 0,
+        coordinators: 0,
+        students: 0,
+        offlineRegistered: 0
+    })
 
     useEffect(() => {
         fetchUsers()
@@ -24,20 +32,77 @@ export default function AdminUsers() {
 
     const fetchUsers = async () => {
         setLoading(true)
-        // Fetch ALL profiles including offline users (is_admin_created = TRUE)
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .order('full_name', { ascending: true })
 
-        if (error) {
-            console.error('Error fetching users:', error)
-            setUsers([])
-        } else {
-            console.log('Fetched users:', data?.length, 'total')
-            console.log('Offline users:', data?.filter(u => u.is_admin_created)?.length)
-            setUsers(data || [])
+        // Fetch ALL profiles with pagination (not just first 1000)
+        let allProfiles = []
+        let from = 0
+        let hasMore = true
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('full_name', { ascending: true })
+                .range(from, from + 999)
+
+            if (error) {
+                console.error('Error fetching users:', error)
+                break
+            }
+
+            if (data && data.length > 0) {
+                allProfiles = [...allProfiles, ...data]
+                from += 1000
+            } else {
+                hasMore = false
+            }
         }
+
+        console.log('👥 Fetched users:', allProfiles.length, 'total')
+        setUsers(allProfiles)
+
+        // Fetch EXACT counts using database queries (not filtered arrays)
+        // This matches SQL queries exactly and avoids RLS/pagination issues
+        try {
+            const [totalCount, adminCount, coordCount, studentCount, offlineCount] = await Promise.all([
+                // Total users: SELECT COUNT(*) FROM profiles
+                supabase.from('profiles').select('*', { count: 'exact', head: true }),
+                // Admins: SELECT COUNT(*) FROM profiles WHERE role='admin'
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin'),
+                // Coordinators: SELECT COUNT(*) FROM profiles WHERE role='coordinator'
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'coordinator'),
+                // Students: SELECT COUNT(*) FROM profiles WHERE role='student'
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
+                // Offline: SELECT COUNT(*) FROM profiles WHERE is_admin_created=TRUE
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin_created', true)
+            ])
+
+            console.log('📊 Exact Database Counts:')
+            console.log('  Total Users:', totalCount.count)
+            console.log('  Admins:', adminCount.count)
+            console.log('  Coordinators:', coordCount.count)
+            console.log('  Students:', studentCount.count)
+            console.log('  Offline Registered:', offlineCount.count)
+
+            setStats({
+                totalUsers: totalCount.count || 0,
+                admins: adminCount.count || 0,
+                coordinators: coordCount.count || 0,
+                students: studentCount.count || 0,
+                offlineRegistered: offlineCount.count || 0
+            })
+        } catch (countError) {
+            console.error('Error fetching counts:', countError)
+            // Fallback to filtered counts if direct queries fail
+            setStats({
+                totalUsers: allProfiles.length,
+                admins: allProfiles.filter(u => u.role === 'admin').length,
+                coordinators: allProfiles.filter(u => u.role === 'coordinator').length,
+                students: allProfiles.filter(u => u.role === 'student').length,
+                offlineRegistered: allProfiles.filter(u => u.is_admin_created === true).length
+            })
+        }
+
         setLoading(false)
     }
 
@@ -172,7 +237,8 @@ export default function AdminUsers() {
     const filteredUsers = users.filter(user => {
         const matchesSearch =
             (user.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (user.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+            (user.college_email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (user.roll_number || '').toLowerCase().includes(searchQuery.toLowerCase())
 
         const matchesRole = roleFilter === 'all' || user.role === roleFilter
 
@@ -215,35 +281,32 @@ export default function AdminUsers() {
                 </div>
             </div>
 
-            {/* Stats Summary */}
+            {/* Stats Summary - Using total counts from stats state, not filtered users */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <p className="text-sm text-gray-600">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{users.length}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalUsers}</p>
+                    <p className="text-xs text-gray-500 mt-1">All profiles in database</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <p className="text-sm text-gray-600">Admins</p>
-                    <p className="text-2xl font-bold text-red-600 mt-1">
-                        {users.filter(u => u.role === 'admin').length}
-                    </p>
+                    <p className="text-2xl font-bold text-red-600 mt-1">{stats.admins}</p>
+                    <p className="text-xs text-gray-500 mt-1">Role: admin</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <p className="text-sm text-gray-600">Coordinators</p>
-                    <p className="text-2xl font-bold text-indigo-600 mt-1">
-                        {users.filter(u => u.role === 'coordinator').length}
-                    </p>
+                    <p className="text-2xl font-bold text-indigo-600 mt-1">{stats.coordinators}</p>
+                    <p className="text-xs text-gray-500 mt-1">Role: coordinator</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                     <p className="text-sm text-gray-600">Students</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                        {users.filter(u => u.role === 'student').length}
-                    </p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">{stats.students}</p>
+                    <p className="text-xs text-gray-500 mt-1">Role: student</p>
                 </div>
                 <div className="bg-orange-50 rounded-lg shadow-sm border border-orange-300 p-4">
                     <p className="text-sm text-orange-700 font-medium">Offline Registered</p>
-                    <p className="text-2xl font-bold text-orange-600 mt-1">
-                        {users.filter(u => u.is_admin_created === true).length}
-                    </p>
+                    <p className="text-2xl font-bold text-orange-600 mt-1">{stats.offlineRegistered}</p>
+                    <p className="text-xs text-orange-600 mt-1">Created by admin</p>
                 </div>
             </div>
 

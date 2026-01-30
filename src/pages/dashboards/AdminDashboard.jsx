@@ -19,11 +19,18 @@ export default function AdminDashboard() {
 
     const fetchStats = async () => {
         try {
-            const [eventsRes, regsRes, revenueRes] = await Promise.all([
+            const [eventsRes, regsRes] = await Promise.all([
                 supabase.from('events').select('*', { count: 'exact' }),
-                supabase.from('registrations').select('*', { count: 'exact' }).eq('status', 'confirmed'),
-                // Revenue calculation - match AdminAnalytics logic
-                supabase
+                supabase.from('registrations').select('*', { count: 'exact' }).eq('status', 'confirmed')
+            ])
+
+            // Fetch ALL confirmed registrations with pagination (match AdminAnalytics logic)
+            let allData = []
+            let from = 0
+            let hasMore = true
+
+            while (hasMore) {
+                const { data } = await supabase
                     .from('registrations')
                     .select(`
                         *,
@@ -31,31 +38,42 @@ export default function AdminDashboard() {
                         profile_id
                     `)
                     .eq('status', 'confirmed')
-            ])
+                    .range(from, from + 999)
+
+                if (data && data.length > 0) {
+                    allData = [...allData, ...data]
+                    from += 1000
+                } else {
+                    hasMore = false
+                }
+            }
 
             // Calculate revenue with team-aware logic (same as AdminAnalytics)
-            let totalRevenue = 0;
-            const data = revenueRes.data || [];
+            let totalRevenue = 0
 
-            data.forEach(reg => {
-                const isLeader = reg.team_members && reg.team_members.length > 0;
+            allData.forEach(reg => {
+                const isLeader = reg.team_members && reg.team_members.length > 0
 
                 // Check if this registration is a team member (only within same event)
-                let isTeamMember = false;
+                let isTeamMember = false
                 if (!isLeader && reg.profile_id && reg.event?.id) {
-                    isTeamMember = data.some(otherReg =>
+                    isTeamMember = allData.some(otherReg =>
                         otherReg.event?.id === reg.event.id &&
                         otherReg.team_members &&
                         otherReg.team_members.length > 0 &&
                         otherReg.team_members.some(member => member.id === reg.profile_id)
-                    );
+                    )
                 }
 
                 // Skip team members - leader pays for all
                 if (!isTeamMember) {
-                    totalRevenue += (reg.event?.fee || 0);
+                    totalRevenue += (reg.event?.fee || 0)
                 }
-            });
+            })
+
+            console.log('💰 Admin Dashboard Revenue Calculation:')
+            console.log('  Total Registrations Fetched:', allData.length)
+            console.log('  Total Revenue:', totalRevenue)
 
             setStats({
                 totalEvents: eventsRes.count || 0,

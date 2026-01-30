@@ -60,7 +60,30 @@ export default function AdminStats() {
     const pendingRegistrations = registrations.filter(r => r.status === 'pending')
     const rejectedRegistrations = registrations.filter(r => r.status === 'rejected')
 
-    const totalRevenue = confirmedRegistrations.reduce((sum, r) => sum + (r.event?.fee || 0), 0)
+    // Team-aware revenue calculation (match AdminAnalytics & AdminDashboard logic)
+    // Only count leaders and individual participants, NOT team members
+    const totalRevenue = (() => {
+        let revenue = 0
+        confirmedRegistrations.forEach(reg => {
+            const isLeader = reg.team_members && reg.team_members.length > 0
+
+            // Check if this registration is a team member (only within same event)
+            let isTeamMember = false
+            if (!isLeader && reg.profile_id && reg.event?.id) {
+                isTeamMember = confirmedRegistrations.some(otherReg =>
+                    otherReg.event?.id === reg.event.id &&
+                    otherReg.team_members?.some(m => m.id === reg.profile_id)
+                )
+            }
+
+            // Only count if NOT a team member
+            if (!isTeamMember) {
+                revenue += (reg.event?.fee || 0)
+            }
+        })
+        return revenue
+    })()
+
     const pendingRevenue = pendingRegistrations.reduce((sum, r) => sum + (r.event?.fee || 0), 0)
     const expectedRevenue = registrations.reduce((sum, r) => sum + (r.event?.fee || 0), 0)
     const averageFee = totalRegistrations > 0 ? expectedRevenue / totalRegistrations : 0

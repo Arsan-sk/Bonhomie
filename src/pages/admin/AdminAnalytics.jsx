@@ -292,28 +292,34 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Total registrations card */}
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-5 text-white shadow-lg flex flex-col justify-between h-full">
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-5 text-white shadow-lg flex flex-col justify-between h-full transition-all duration-300 hover:scale-[1.02] hover:shadow-xl">
                   <div>
-                    <p className="text-xs opacity-90 uppercase font-bold mb-1 tracking-wider">
-                      Total Registrations
-                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs opacity-90 uppercase font-bold tracking-wider">
+                        Total Registrations
+                      </p>
+                      <Users className="h-6 w-6 opacity-75" />
+                    </div>
                     <p className="text-4xl font-bold">{stats.totalRegistrations}</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-[10px] text-center mt-6">
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      CONFIRMED
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.confirmed}</b>
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 py-2 border border-white/10">
+                      <div className="text-[10px] uppercase opacity-75 font-semibold">Confirmed</div>
+                      <div className="text-lg font-bold text-green-300">
+                        {stats.statusBreakdown.confirmed}
+                      </div>
                     </div>
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      PENDING
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.pending}</b>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 py-2 border border-white/10">
+                      <div className="text-[10px] uppercase opacity-75 font-semibold">Pending</div>
+                      <div className="text-lg font-bold text-blue-300">
+                        {stats.statusBreakdown.pending}
+                      </div>
                     </div>
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      REJECTED
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.rejected}</b>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 py-2 border border-white/10">
+                      <div className="text-[10px] uppercase opacity-75 font-semibold">Rejected</div>
+                      <div className="text-lg font-bold text-red-300">
+                        {stats.statusBreakdown.rejected}
+                      </div>
                     </div>
                   </div>
                 </div>
