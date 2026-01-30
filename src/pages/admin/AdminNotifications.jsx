@@ -31,8 +31,8 @@ export default function AdminNotifications() {
                 if (error) throw error
                 alert(`Broadcast sent to ${users.length} users.`)
             } else {
-                const { data: user, error: userError } = await supabase.from('profiles').select('id').eq('email', formData.recipient_email).single()
-                if (userError || !user) throw new Error('User not found')
+                const { data: user, error: userError } = await supabase.from('profiles').select('id').eq('college_email', formData.recipient_email).maybeSingle()
+                if (userError || !user) throw new Error('User not found with that email address')
 
                 const { error } = await supabase.from('notifications').insert([{
                     user_id: user.id,

@@ -84,6 +84,34 @@ export default function Register() {
         }
     }, [selectedSchool, setValue]);
 
+    /**
+     * Helper function to fetch profile with retry mechanism
+     * The database trigger might take a moment to create the profile
+     */
+    const fetchProfileWithRetry = async (userId, maxRetries = 3, delay = 500) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("role")
+                .eq("id", userId)
+                .maybeSingle();
+
+            if (data) {
+                return { data, error: null };
+            }
+
+            // Wait before retrying (give trigger time to execute)
+            if (attempt < maxRetries) {
+                console.log(`Profile not found, retrying in ${delay}ms... (attempt ${attempt}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 1.5; // Increase delay for each retry
+            }
+        }
+
+        // If still no profile after retries, return null (AuthContext will handle fallback)
+        return { data: null, error: { message: 'Profile not created after retries' } };
+    };
+
     const onSubmit = async data => {
         setIsLoading(true);
         setError("");
@@ -192,18 +220,12 @@ export default function Register() {
 
             if (authError) throw authError;
 
-            // Fetch user profile to redirect to appropriate dashboard
-            const { data: profileResponse, error: profileError } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", authData.user.id)
-                .single();
+            // Fetch user profile with retry mechanism (trigger may take a moment)
+            const { data: profileResponse, error: profileError } = await fetchProfileWithRetry(authData.user.id);
 
             if (profileError) {
-                console.error("Profile fetch error after registration:", profileError);
-                // Default to student dashboard if profile fetch fails
-                navigate("/student/dashboard");
-                return;
+                console.warn("Profile fetch warning after registration:", profileError);
+                // AuthContext will create fallback profile, proceed to dashboard
             }
 
             // Role-based redirect after successful registration
