@@ -14,8 +14,7 @@ export default function AdminUsers() {
         roll_number: '',
         full_name: '',
         phone_number: '',
-        college_email: '',
-        gender: 'male' // Default to male
+        college_email: ''
     })
 
     useEffect(() => {
@@ -68,8 +67,7 @@ export default function AdminUsers() {
                 p_college_email: email,
                 p_phone: newProfile.phone_number || null,
                 p_department: 'General',
-                p_year_of_study: null,
-                p_gender: newProfile.gender || 'male'
+                p_year_of_study: null
             })
 
             if (error) {
@@ -106,8 +104,7 @@ export default function AdminUsers() {
                 roll_number: '',
                 full_name: '',
                 phone_number: '',
-                college_email: '',
-                gender: 'male'
+                college_email: ''
             })
             setShowCreateModal(false)
 
@@ -204,13 +201,13 @@ export default function AdminUsers() {
                         <select
                             value={roleFilter}
                             onChange={(e) => setRoleFilter(e.target.value)}
-                            className="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        >
-                            <option value="all">All Roles</option>
-                            <option value="admin">Admin</option>
-                            <option value="coordinator">Coordinator</option>
-                            <option value="student">Student</option>
-                        </select>
+                        className="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                        <option value="all">All Roles</option>
+                        <option value="admin">Admin</option>
+                        <option value="coordinator">Coordinator</option>
+                        <option value="student">Student</option>
+                    </select>
                     </div>
                 </div>
             </div>
@@ -260,7 +257,7 @@ export default function AdminUsers() {
                 <div className="fixed inset-0 z-50 overflow-y-auto">
                     <div className="flex min-h-screen items-center justify-center p-4">
                         {/* Backdrop */}
-                        <div
+                        <div 
                             className="fixed inset-0 bg-black bg-opacity-30 transition-opacity"
                             onClick={() => !creating && setShowCreateModal(false)}
                         />
@@ -334,23 +331,6 @@ export default function AdminUsers() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                         disabled={creating}
                                     />
-                                </div>
-
-                                {/* Gender */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Gender <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        value={newProfile.gender}
-                                        onChange={(e) => setNewProfile({ ...newProfile, gender: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                        disabled={creating}
-                                    >
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                    </select>
-                                    <p className="mt-1 text-xs text-gray-500">Default: Male</p>
                                 </div>
 
                                 {/* Email (Optional - auto-generated) */}
