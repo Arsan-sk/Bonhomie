@@ -44,12 +44,12 @@ export default function CoordinatorEventManage() {
     const [screenshotModal, setScreenshotModal] = useState({ isOpen: false, url: '' })
     const [selectedProfile, setSelectedProfile] = useState(null) // For viewing participant profile
     const [bannerImageError, setBannerImageError] = useState(false)
-    
+
     // Replace Member State
     const [replaceModal, setReplaceModal] = useState({ isOpen: false, memberId: null, memberName: '' })
     const [replaceRollNumber, setReplaceRollNumber] = useState('')
     const [isReplacing, setIsReplacing] = useState(false)
-    
+
     // Add Member State
     const [addMemberModal, setAddMemberModal] = useState({ isOpen: false, leaderId: null, leaderName: '' })
     const [addMemberRollNumber, setAddMemberRollNumber] = useState('')
@@ -73,6 +73,7 @@ export default function CoordinatorEventManage() {
         fullName: '',
         phone: '',
         email: '',
+        gender: 'male', // Default to male
         loading: false,
         error: null,
         returnToAddParticipant: false // Track if we should return to add participant after creation
@@ -90,7 +91,7 @@ export default function CoordinatorEventManage() {
         loading: false,
         error: null,
         creatingMemberInline: false,
-        inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+        inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
     })
 
     useEffect(() => {
@@ -221,6 +222,36 @@ export default function CoordinatorEventManage() {
     // ============================================
 
     /**
+     * Check if a gender is allowed for the current event
+     * @param {string} gender - The gender to check (e.g., 'male', 'female')
+     * @returns {object} { allowed: boolean, message: string }
+     */
+    const isGenderAllowed = (gender) => {
+        // If no allowed_genders set or empty array, all genders are allowed
+        if (!event?.allowed_genders || event.allowed_genders.length === 0) {
+            return { allowed: true }
+        }
+
+        // Normalize gender for comparison (case-insensitive)
+        const normalizedGender = gender?.toLowerCase()?.trim() || ''
+
+        // Check if gender is in allowed list (case-insensitive comparison)
+        const allowedLower = event.allowed_genders.map(g => g.toLowerCase())
+        const isAllowed = allowedLower.includes(normalizedGender)
+
+        if (!isAllowed) {
+            // Format allowed genders for error message
+            const allowedFormatted = event.allowed_genders.join(' or ')
+            return {
+                allowed: false,
+                message: `This event is only for ${allowedFormatted} participants. Selected gender: ${gender || 'Unknown'}`
+            }
+        }
+
+        return { allowed: true }
+    }
+
+    /**
      * Validate roll number and check if profile exists and eligible for registration
      * @param {string} rollNumber - Student's roll number
      * @param {boolean} forTeamLeader - Whether this is for team leader validation
@@ -229,7 +260,7 @@ export default function CoordinatorEventManage() {
     const validateRollNumber = async (rollNumber, forTeamLeader = false) => {
         try {
             const normalized = rollNumber.trim().toLowerCase()
-            
+
             if (!normalized) {
                 return { valid: false, error: 'Roll number is required' }
             }
@@ -237,7 +268,7 @@ export default function CoordinatorEventManage() {
             // 1. Check if profile exists
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
-                .select('id, full_name, roll_number, phone, college_email, department, year_of_study, is_admin_created')
+                .select('id, full_name, roll_number, phone, college_email, department, year_of_study, gender, is_admin_created')
                 .ilike('roll_number', normalized)
                 .maybeSingle()
 
@@ -254,7 +285,18 @@ export default function CoordinatorEventManage() {
                 }
             }
 
-            // 2. Check if already registered for this event
+            // 2. Check gender eligibility for the event
+            const genderCheck = isGenderAllowed(profile.gender)
+            if (!genderCheck.allowed) {
+                return {
+                    valid: false,
+                    error: genderCheck.message,
+                    profile: profile,
+                    genderNotAllowed: true
+                }
+            }
+
+            // 3. Check if already registered for this event
             const { data: existingReg, error: regError } = await supabase
                 .from('registrations')
                 .select('id, status, registered_at')
@@ -274,7 +316,7 @@ export default function CoordinatorEventManage() {
                 }
             }
 
-            // 3. For team members: Check if already in another team for this event
+            // 4. For team members: Check if already in another team for this event
             if (!forTeamLeader) {
                 const { data: teamRegs, error: teamError } = await supabase
                     .from('registrations')
@@ -297,7 +339,7 @@ export default function CoordinatorEventManage() {
                 }
             }
 
-            // 4. All checks passed
+            // 5. All checks passed
             return {
                 valid: true,
                 profile: profile
@@ -313,28 +355,30 @@ export default function CoordinatorEventManage() {
 
     /**
      * Create a new offline profile through admin/coordinator
-     * Creates BOTH profile AND auth user with default password
-     * User can login immediately with rollnumber@aiktc.ac.in / Bonhomie@2026
+     * Creates ONLY profile entry (NO auth user - offline registration)
+     * Student can be added to events but cannot login
      * @param {string} rollNumber - Student's roll number
      * @param {string} fullName - Student's full name
      * @param {string} phone - Student's phone number
-     * @returns {object} Created profile data with auth user
+     * @param {string} gender - Student's gender (default: 'male')
+     * @returns {object} Created profile data
      */
-    const createOfflineProfile = async (rollNumber, fullName, phone) => {
+    const createOfflineProfile = async (rollNumber, fullName, phone, gender = 'male') => {
         try {
             const normalizedRoll = rollNumber.trim().toLowerCase()
             const email = `${normalizedRoll}@aiktc.ac.in`
 
-            console.log('Creating offline profile with auth:', { normalizedRoll, fullName, phone, email })
+            console.log('Creating offline profile (simple):', { normalizedRoll, fullName, phone, email, gender })
 
-            // Call the PostgreSQL function that creates BOTH auth user and profile
-            const { data, error } = await supabase.rpc('create_offline_profile_with_auth', {
+            // Call the SIMPLE function that creates profile ONLY (no auth user)
+            const { data, error } = await supabase.rpc('create_simple_offline_profile', {
                 p_roll_number: normalizedRoll,
                 p_full_name: fullName.trim(),
                 p_college_email: email,
                 p_phone: phone.trim(),
                 p_department: 'General',
-                p_year_of_study: null
+                p_year_of_study: null,
+                p_gender: gender || 'male'
             })
 
             if (error) {
@@ -349,8 +393,7 @@ export default function CoordinatorEventManage() {
                 throw new Error(errorMsg)
             }
 
-            console.log('✅ Profile and Auth User created:', data)
-            console.log('🔑 Login credentials:', { email: data.email, password: data.default_password })
+            console.log('✅ Profile created successfully (offline mode):', data)
 
             // Return profile data in expected format
             const profile = {
@@ -359,8 +402,8 @@ export default function CoordinatorEventManage() {
                 roll_number: data.roll_number,
                 college_email: data.email,
                 phone: phone.trim(),
+                gender: gender,
                 is_admin_created: true,
-                auth_user_id: data.auth_user_id,
                 role: 'student',
                 department: 'General',
                 year_of_study: null
@@ -440,7 +483,7 @@ export default function CoordinatorEventManage() {
     const registerTeamOffline = async (leaderProfileId, teamMemberProfiles) => {
         try {
             const totalSize = teamMemberProfiles.length + 1
-            
+
             // Validate team size
             if (totalSize < event.min_team_size) {
                 throw new Error(`Team size must be at least ${event.min_team_size} (including leader). Current: ${totalSize}`)
@@ -503,7 +546,7 @@ export default function CoordinatorEventManage() {
                     .from('registrations')
                     .delete()
                     .eq('id', leaderReg.id)
-                
+
                 throw new Error('Failed to register team members. Please try again.')
             }
 
@@ -576,7 +619,7 @@ export default function CoordinatorEventManage() {
                 loading: false,
                 error: null,
                 creatingMemberInline: false,
-                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
             })
         } else {
             // Open individual participant modal
@@ -597,7 +640,7 @@ export default function CoordinatorEventManage() {
      */
     const handleValidateIndividualRollNumber = async () => {
         const rollNumber = addParticipantModal.rollNumber.trim()
-        
+
         if (!rollNumber) {
             setAddParticipantModal(prev => ({ ...prev, error: 'Please enter a roll number' }))
             return
@@ -652,6 +695,7 @@ export default function CoordinatorEventManage() {
             fullName: '',
             phone: '',
             email: `${normalized}@aiktc.ac.in`,
+            gender: 'male', // Default to male
             loading: false,
             error: null,
             returnToAddParticipant
@@ -662,7 +706,7 @@ export default function CoordinatorEventManage() {
      * Handle creating new profile from Create Profile modal
      */
     const handleCreateProfile = async () => {
-        const { rollNumber, fullName, phone } = createProfileModal
+        const { rollNumber, fullName, phone, gender } = createProfileModal
 
         if (!fullName.trim()) {
             setCreateProfileModal(prev => ({ ...prev, error: 'Full name is required' }))
@@ -674,11 +718,20 @@ export default function CoordinatorEventManage() {
             return
         }
 
+        // Check gender eligibility for the event (when adding to an event - individual)
+        if (createProfileModal.returnToAddParticipant) {
+            const genderCheck = isGenderAllowed(gender)
+            if (!genderCheck.allowed) {
+                setCreateProfileModal(prev => ({ ...prev, error: genderCheck.message }))
+                return
+            }
+        }
+
         setCreateProfileModal(prev => ({ ...prev, loading: true, error: null }))
 
         try {
-            const result = await createOfflineProfile(rollNumber, fullName, phone)
-            
+            const result = await createOfflineProfile(rollNumber, fullName, phone, gender)
+
             // Success! Close create modal
             setCreateProfileModal({
                 isOpen: false,
@@ -686,21 +739,42 @@ export default function CoordinatorEventManage() {
                 fullName: '',
                 phone: '',
                 email: '',
+                gender: 'male',
                 loading: false,
                 error: null,
                 returnToAddParticipant: false
             })
 
-            // If coming from Add Participant modal, go back there with the new profile
+            // If coming from Add Participant modal, automatically register the participant
             if (createProfileModal.returnToAddParticipant) {
-                setAddParticipantModal(prev => ({
-                    ...prev,
-                    profile: result.profile,
-                    error: null
-                }))
-            }
+                try {
+                    // Automatically register to the event
+                    await registerIndividualOffline(result.profile.id)
 
-            alert(`✅ Profile created successfully for ${fullName}!\n\nEmail: ${result.profile.college_email}\n\nNote: Student must sign up with this email to activate their account.`)
+                    // Close Add Participant modal
+                    setAddParticipantModal({
+                        isOpen: false,
+                        rollNumber: '',
+                        loading: false,
+                        profile: null,
+                        error: null,
+                        alreadyRegistered: false,
+                        registrationDetails: null
+                    })
+
+                    // Refresh participants list
+                    fetchParticipants()
+
+                    alert(`✅ Profile created and registered successfully!\\n\\nName: ${fullName}\\nRoll: ${rollNumber}\\nEvent: ${event.name}\\n\\nℹ️ Login functionality will be added later.`)
+                } catch (regError) {
+                    // Profile created but registration failed
+                    console.error('Auto-registration failed:', regError)
+                    alert(`✅ Profile created successfully!\\n\\nName: ${fullName}\\nRoll: ${rollNumber}\\n\\n⚠️ Could not auto-register: ${regError.message}\\nPlease try adding the participant again.`)
+                }
+            } else {
+                // Profile created without auto-registration (from other flows)
+                alert(`✅ Profile created successfully!\\n\\nName: ${fullName}\\nRoll: ${rollNumber}\\nEmail: ${result.profile.college_email}\\n\\nℹ️ Login functionality will be added later.`)
+            }
         } catch (error) {
             setCreateProfileModal(prev => ({
                 ...prev,
@@ -722,7 +796,7 @@ export default function CoordinatorEventManage() {
 
         try {
             await registerIndividualOffline(addParticipantModal.profile.id)
-            
+
             // Success!
             setAddParticipantModal({
                 isOpen: false,
@@ -735,7 +809,7 @@ export default function CoordinatorEventManage() {
             })
 
             alert(`✅ ${addParticipantModal.profile.full_name} registered successfully for ${event.name}!`)
-            
+
             // Refresh participants list
             fetchParticipants()
         } catch (error) {
@@ -752,7 +826,7 @@ export default function CoordinatorEventManage() {
      */
     const handleValidateTeamLeader = async () => {
         const rollNumber = addTeamModal.leaderRollNumber.trim()
-        
+
         if (!rollNumber) {
             setAddTeamModal(prev => ({ ...prev, error: 'Please enter team leader roll number' }))
             return
@@ -802,18 +876,18 @@ export default function CoordinatorEventManage() {
     const handleSearchTeamMembers = async (searchTerm) => {
         console.log('Searching for team members with term:', searchTerm)
         setAddTeamModal(prev => ({ ...prev, memberSearch: searchTerm, loading: true }))
-        
+
         const results = await searchMembersByRollNumber(searchTerm)
         console.log('Search results:', results.length, 'profiles found')
-        
+
         // Filter out leader and already selected members
-        const filteredResults = results.filter(profile => 
+        const filteredResults = results.filter(profile =>
             profile.id !== addTeamModal.leaderProfile.id &&
             !addTeamModal.selectedMembers.some(m => m.id === profile.id)
         )
-        
+
         console.log('Filtered results:', filteredResults.length, 'after removing leader/selected')
-        
+
         setAddTeamModal(prev => ({
             ...prev,
             searchResults: filteredResults,
@@ -827,7 +901,7 @@ export default function CoordinatorEventManage() {
     const handleSelectTeamMember = async (profile) => {
         // Validate this member can be added
         const result = await validateRollNumber(profile.roll_number, false)
-        
+
         if (!result.valid) {
             alert(result.error)
             return
@@ -855,7 +929,7 @@ export default function CoordinatorEventManage() {
      * Create inline member profile during team creation
      */
     const handleCreateInlineMember = async () => {
-        const { rollNumber, fullName, phone } = addTeamModal.inlineCreateData
+        const { rollNumber, fullName, phone, gender } = addTeamModal.inlineCreateData
 
         if (!rollNumber.trim()) {
             alert('Roll number is required')
@@ -877,24 +951,31 @@ export default function CoordinatorEventManage() {
             return
         }
 
+        // Check gender eligibility for the event
+        const genderCheck = isGenderAllowed(gender)
+        if (!genderCheck.allowed) {
+            alert(genderCheck.message)
+            return
+        }
+
         setAddTeamModal(prev => ({ ...prev, loading: true, error: null }))
 
         try {
-            console.log('Creating inline profile:', { rollNumber, fullName, phone })
-            const result = await createOfflineProfile(rollNumber, fullName, phone)
-            
+            console.log('Creating inline profile:', { rollNumber, fullName, phone, gender })
+            const result = await createOfflineProfile(rollNumber, fullName, phone, gender)
+
             if (!result.success || !result.profile) {
                 throw new Error('Profile creation returned invalid data')
             }
 
             console.log('Profile created successfully, adding to team:', result.profile)
-            
+
             // Add to selected members and clear form
             setAddTeamModal(prev => ({
                 ...prev,
                 selectedMembers: [...prev.selectedMembers, result.profile],
                 creatingMemberInline: false,
-                inlineCreateData: { rollNumber: '', fullName: '', phone: '' },
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' },
                 memberSearch: '', // Clear search field
                 searchResults: [], // Clear search results
                 loading: false,
@@ -905,10 +986,10 @@ export default function CoordinatorEventManage() {
         } catch (error) {
             console.error('Failed to create inline profile:', error)
             alert('Failed to create profile: ' + error.message)
-            setAddTeamModal(prev => ({ 
-                ...prev, 
+            setAddTeamModal(prev => ({
+                ...prev,
                 loading: false,
-                error: error.message 
+                error: error.message
             }))
         }
     }
@@ -925,7 +1006,7 @@ export default function CoordinatorEventManage() {
 
         try {
             await registerTeamOffline(addTeamModal.leaderProfile.id, addTeamModal.selectedMembers)
-            
+
             // Success!
             const teamSize = addTeamModal.selectedMembers.length + 1
             setAddTeamModal({
@@ -939,11 +1020,11 @@ export default function CoordinatorEventManage() {
                 loading: false,
                 error: null,
                 creatingMemberInline: false,
-                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
             })
 
             alert(`✅ Team registered successfully!\n\nLeader: ${addTeamModal.leaderProfile.full_name}\nTeam Size: ${teamSize} members\nEvent: ${event.name}`)
-            
+
             // Refresh participants list
             fetchParticipants()
         } catch (error) {
@@ -1127,8 +1208,8 @@ export default function CoordinatorEventManage() {
 
             if (leaderError) throw leaderError
 
-            const leader = leaderRegs.find(reg => 
-                reg.team_members && 
+            const leader = leaderRegs.find(reg =>
+                reg.team_members &&
                 Array.isArray(reg.team_members) &&
                 reg.team_members.some(m => m.id === currentMember.profile_id)
             )
@@ -1201,8 +1282,8 @@ export default function CoordinatorEventManage() {
 
             if (leaderError) throw leaderError
 
-            const leader = leaderRegs.find(reg => 
-                reg.team_members && 
+            const leader = leaderRegs.find(reg =>
+                reg.team_members &&
                 Array.isArray(reg.team_members) &&
                 reg.team_members.some(m => m.id === memberReg.profile_id)
             )
@@ -1211,9 +1292,9 @@ export default function CoordinatorEventManage() {
             if (event?.subcategory === 'Group' && event?.min_team_size && leader) {
                 const currentTeamSize = (leader.team_members?.length || 0) + 1 // +1 for leader
                 const sizeAfterDeletion = currentTeamSize - 1
-                
+
                 if (sizeAfterDeletion < event.min_team_size) {
-                    const message = 
+                    const message =
                         `⚠️ Cannot Delete Member\n\n` +
                         `This event requires a minimum of ${event.min_team_size} team members (including leader).\n\n` +
                         `Current team size: ${currentTeamSize}\n` +
@@ -1222,9 +1303,9 @@ export default function CoordinatorEventManage() {
                         `1. Add another member first, then delete this one\n` +
                         `2. Delete the entire team registration instead\n\n` +
                         `Do you want to delete the ENTIRE TEAM registration instead?`
-                    
+
                     const deleteWholeTeam = confirm(message)
-                    
+
                     if (deleteWholeTeam) {
                         // Delete all team member registrations first
                         for (const member of leader.team_members) {
@@ -1233,20 +1314,20 @@ export default function CoordinatorEventManage() {
                                 .delete()
                                 .eq('event_id', id)
                                 .eq('profile_id', member.id)
-                            
+
                             if (deleteMemberError) {
                                 console.error('Error deleting team member:', deleteMemberError)
                             }
                         }
-                        
+
                         // Delete the leader's registration
                         const { error: deleteLeaderError } = await supabase
                             .from('registrations')
                             .delete()
                             .eq('id', leader.id)
-                        
+
                         if (deleteLeaderError) throw deleteLeaderError
-                        
+
                         alert('✅ Entire team registration deleted successfully')
                         fetchParticipants()
                         return
@@ -1765,7 +1846,7 @@ export default function CoordinatorEventManage() {
                         </div>
                     </>
                 ) : (
-                    <AnimatedBannerFallback 
+                    <AnimatedBannerFallback
                         eventName={event.name}
                         category={event.category}
                         height="h-32 md:h-48"
@@ -1832,8 +1913,8 @@ export default function CoordinatorEventManage() {
                                     <div className="flex-1">
                                         <h4 className="text-sm font-semibold text-blue-900 mb-1">Offline Registration Available</h4>
                                         <p className="text-sm text-blue-800">
-                                            Use the <strong>"+ Add"</strong> button to register students who didn't register online. 
-                                            {event?.subcategory?.toLowerCase() === 'group' 
+                                            Use the <strong>"+ Add"</strong> button to register students who didn't register online.
+                                            {event?.subcategory?.toLowerCase() === 'group'
                                                 ? ' You can add complete teams with leaders and members.'
                                                 : ' You can add individual participants directly.'
                                             }
@@ -1841,7 +1922,7 @@ export default function CoordinatorEventManage() {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="text-lg font-bold text-gray-900">Participants</h3><p className="text-sm text-gray-500">Manage individuals and teams.</p></div>
                                 <div className="flex gap-2">
@@ -1924,7 +2005,7 @@ export default function CoordinatorEventManage() {
                                         // Apply search filter if search query exists
                                         if (participantSearch.trim()) {
                                             const searchTerm = participantSearch.trim().toLowerCase();
-                                            displayParticipants = displayParticipants.filter(p => 
+                                            displayParticipants = displayParticipants.filter(p =>
                                                 p.user?.roll_number?.toLowerCase().includes(searchTerm)
                                             );
                                         }
@@ -2215,8 +2296,8 @@ export default function CoordinatorEventManage() {
                                                         .filter(p => {
                                                             // For group events (max_team_size > 1), only show team leaders
                                                             if (event.max_team_size > 1) {
-                                                                return p.status === 'confirmed' && p.team_members?.length > 0 && 
-                                                                       p.id !== resultForm.first_place && p.id !== resultForm.second_place
+                                                                return p.status === 'confirmed' && p.team_members?.length > 0 &&
+                                                                    p.id !== resultForm.first_place && p.id !== resultForm.second_place
                                                             }
                                                             // For individual events, show all confirmed participants except first and second
                                                             return p.status === 'confirmed' && p.id !== resultForm.first_place && p.id !== resultForm.second_place
@@ -3146,7 +3227,7 @@ export default function CoordinatorEventManage() {
                             <p className="text-sm text-gray-500 mb-6">
                                 Register a student for this event by entering their roll number
                             </p>
-                            
+
                             {/* Roll Number Input */}
                             <div className="mb-4">
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -3293,7 +3374,7 @@ export default function CoordinatorEventManage() {
             {/* CREATE PROFILE MODAL */}
             {/* ============================================ */}
             {createProfileModal.isOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <div className="flex items-center gap-3 mb-6">
@@ -3370,6 +3451,23 @@ export default function CoordinatorEventManage() {
                                         disabled={createProfileModal.loading}
                                     />
                                     <p className="text-xs text-gray-500 mt-1">ⓘ 10-digit mobile number</p>
+                                </div>
+
+                                {/* Gender */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        Gender <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={createProfileModal.gender}
+                                        onChange={(e) => setCreateProfileModal(prev => ({ ...prev, gender: e.target.value, error: null }))}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        disabled={createProfileModal.loading}
+                                    >
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">ⓘ Default: Male</p>
                                 </div>
 
                                 {/* Email (Read-only) */}
@@ -3547,7 +3645,7 @@ export default function CoordinatorEventManage() {
                                                 loading: false,
                                                 error: null,
                                                 creatingMemberInline: false,
-                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
                                             })}
                                             className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
                                         >
@@ -3628,7 +3726,7 @@ export default function CoordinatorEventManage() {
                                                 onClick={() => setAddTeamModal(prev => ({
                                                     ...prev,
                                                     creatingMemberInline: true,
-                                                    inlineCreateData: { rollNumber: addTeamModal.memberSearch, fullName: '', phone: '' }
+                                                    inlineCreateData: { rollNumber: addTeamModal.memberSearch, fullName: '', phone: '', gender: 'male' }
                                                 }))}
                                                 className="px-4 py-2 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 transition text-sm"
                                             >
@@ -3665,6 +3763,17 @@ export default function CoordinatorEventManage() {
                                                     placeholder="Phone (10 digits)"
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                                                 />
+                                                <select
+                                                    value={addTeamModal.inlineCreateData.gender}
+                                                    onChange={(e) => setAddTeamModal(prev => ({
+                                                        ...prev,
+                                                        inlineCreateData: { ...prev.inlineCreateData, gender: e.target.value }
+                                                    }))}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                                >
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                </select>
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={handleCreateInlineMember}
@@ -3677,7 +3786,7 @@ export default function CoordinatorEventManage() {
                                                         onClick={() => setAddTeamModal(prev => ({
                                                             ...prev,
                                                             creatingMemberInline: false,
-                                                            inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                                            inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
                                                         }))}
                                                         className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition text-sm"
                                                     >
@@ -3717,7 +3826,7 @@ export default function CoordinatorEventManage() {
                                     {addTeamModal.selectedMembers.length + 1 < event?.min_team_size && (
                                         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                                             <p className="text-sm text-yellow-800">
-                                                ⚠️ Minimum {event?.min_team_size} members required (including leader). 
+                                                ⚠️ Minimum {event?.min_team_size} members required (including leader).
                                                 Add {event?.min_team_size - addTeamModal.selectedMembers.length - 1} more member(s).
                                             </p>
                                         </div>
@@ -3735,7 +3844,7 @@ export default function CoordinatorEventManage() {
                                         <button
                                             onClick={handleRegisterTeam}
                                             disabled={
-                                                addTeamModal.loading || 
+                                                addTeamModal.loading ||
                                                 addTeamModal.selectedMembers.length + 1 < event?.min_team_size ||
                                                 addTeamModal.selectedMembers.length + 1 > event?.max_team_size
                                             }
@@ -3755,7 +3864,7 @@ export default function CoordinatorEventManage() {
                                                 loading: false,
                                                 error: null,
                                                 creatingMemberInline: false,
-                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '' }
+                                                inlineCreateData: { rollNumber: '', fullName: '', phone: '', gender: 'male' }
                                             })}
                                             disabled={addTeamModal.loading}
                                             className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition"
