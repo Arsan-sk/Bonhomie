@@ -5,7 +5,7 @@
 -- FIXED: Includes ALL domains, not just @aiktc.ac.in
 -- ============================================
 
--- STEP 1: First, let's see what we're dealing with (ALL DOMAINS)
+-- STEP 1: First, let's see what we're dealing with ok(ALL DOMAINS)
 -- ============================================
 
 SELECT 

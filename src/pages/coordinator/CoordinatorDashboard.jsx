@@ -40,41 +40,60 @@ export default function CoordinatorDashboard() {
             let totalRevenue = 0
 
             if (eventIds.length > 0) {
-                // Fetch registrations with event details and team info
-                const { data: registrations, error: regError } = await supabase
-                    .from('registrations')
-                    .select(`
-                        *,
-                        event:events(id, fee, name),
-                        profile_id
-                    `)
-                    .in('event_id', eventIds)
-                    .eq('status', 'confirmed')
+                // Fetch registrations with event details and team info (with Pagination)
+                let allRegistrations = []
+                let from = 0
+                let hasMore = true
 
-                if (!regError && registrations) {
-                    totalParticipants = registrations.length
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('registrations')
+                        .select(`
+                            *,
+                            event:events(id, fee, name),
+                            profile_id
+                        `)
+                        .in('event_id', eventIds)
+                        .eq('status', 'confirmed')
+                        .range(from, from + 999)
 
-                    // Calculate revenue with team-aware logic (same as AdminAnalytics)
-                    registrations.forEach(reg => {
-                        const isLeader = reg.team_members && reg.team_members.length > 0;
+                    if (error) {
+                        console.error('Error fetching registrations batch:', error)
+                        // If one batch fails, we might miss data, but we continue with what we have or break
+                        break
+                    }
 
-                        // Check if this registration is a team member (only within same event)
-                        let isTeamMember = false;
-                        if (!isLeader && reg.profile_id && reg.event?.id) {
-                            isTeamMember = registrations.some(otherReg =>
-                                otherReg.event?.id === reg.event.id &&
-                                otherReg.team_members &&
-                                otherReg.team_members.length > 0 &&
-                                otherReg.team_members.some(member => member.id === reg.profile_id)
-                            );
-                        }
-
-                        // Skip team members - leader pays for all
-                        if (!isTeamMember) {
-                            totalRevenue += (reg.event?.fee || 0);
-                        }
-                    });
+                    if (data && data.length > 0) {
+                        allRegistrations = [...allRegistrations, ...data]
+                        from += 1000
+                    } else {
+                        hasMore = false
+                    }
                 }
+
+                totalParticipants = allRegistrations.length
+
+                // Calculate revenue with team-aware logic (same as AdminAnalytics)
+                allRegistrations.forEach(reg => {
+                    const isLeader = reg.team_members && reg.team_members.length > 0;
+
+                    // Check if this registration is a team member (only within same event)
+                    let isTeamMember = false;
+                    if (!isLeader && reg.profile_id && reg.event?.id) {
+                        // Optimizing lookup by checking only within fetched data
+                        isTeamMember = allRegistrations.some(otherReg =>
+                            otherReg.event?.id === reg.event.id &&
+                            otherReg.team_members &&
+                            otherReg.team_members.length > 0 &&
+                            otherReg.team_members.some(member => member.id === reg.profile_id)
+                        );
+                    }
+
+                    // Skip team members - leader pays for all
+                    if (!isTeamMember) {
+                        totalRevenue += (reg.event?.fee || 0);
+                    }
+                });
             }
 
             setStats({
