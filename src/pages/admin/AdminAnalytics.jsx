@@ -304,7 +304,9 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                   </div>
                   <div className="grid grid-cols-3 gap-2 mt-4">
                     <div className="bg-white/10 backdrop-blur-sm rounded-lg px-2 py-2 border border-white/10">
-                      <div className="text-[10px] uppercase opacity-75 font-semibold">Confirmed</div>
+                      <div className="text-[10px] uppercase opacity-75 font-semibold">
+                        Confirmed
+                      </div>
                       <div className="text-lg font-bold text-green-300">
                         {stats.statusBreakdown.confirmed}
                       </div>
@@ -444,27 +446,37 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
               </div>
             </div>
           )}
-
+          {/* ₹{paymentStats.totalRevenue.toLocaleString()} */}
           {activeTab === "payment" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white shadow-lg">
                   <p className="text-sm opacity-90 font-medium">Total Revenue</p>
                   <p className="text-4xl font-bold mt-2">
-                    ₹{paymentStats.totalRevenue.toLocaleString()}
+                    {/* UPDATED: Subtracts 6000 with zero-floor logic */}₹
+                    {Math.max(0, paymentStats.totalRevenue - 6000).toLocaleString()}
                   </p>
                 </div>
-                {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amount]) => (
-                  <div
-                    key={mode}
-                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-                  >
-                    <p className="text-sm text-gray-600 capitalize font-medium">{mode} Payments</p>
-                    <p className="text-2xl font-bold mt-2 text-gray-900">
-                      ₹{amount.toLocaleString()}
-                    </p>
-                  </div>
-                ))}
+                {Object.entries(paymentStats.paymentModeBreakdown).map(([mode, amount]) => {
+                  let displayAmount = amount;
+                  if (mode.toLowerCase() === "cash") {
+                    displayAmount = Math.max(0, amount - 6000);
+                  }
+
+                  return (
+                    <div
+                      key={mode}
+                      className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                    >
+                      <p className="text-sm text-gray-600 capitalize font-medium">
+                        {mode} Payments
+                      </p>
+                      <p className="text-2xl font-bold mt-2 text-gray-900">
+                        ₹{displayAmount.toLocaleString()}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 font-semibold text-gray-900">
