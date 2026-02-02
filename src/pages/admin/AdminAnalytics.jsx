@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import html2canvas from "html2canvas";
-import { TrendingUp, Users, Award, DollarSign, Calendar, Activity, Download } from "lucide-react";
+import {
+  TrendingUp,
+  Users,
+  Award,
+  DollarSign,
+  Calendar,
+  Activity,
+  Download,
+  BarChart2,
+} from "lucide-react"; // Added BarChart2
 import {
   generateIndividualParticipantsCSV,
   generateTeamParticipantsCSV,
@@ -18,6 +27,9 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const [selectedEvent, setSelectedEvent] = useState(eventIdFilter || null);
   const [events, setEvents] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
+
+  // New state for chart toggle
+  const [categoryChartType, setCategoryChartType] = useState("stacked"); // "stacked" or "bar"
 
   // Refs for the cards we want to download
   const categoryGraphRef = useRef(null);
@@ -249,6 +261,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     }
   };
 
+  // --- COMPONENT FOR STACKED BAR (Original) ---
   const CategoryRow = ({ label, metrics }) => {
     const total = metrics.count || 0;
     const getWidth = count => {
@@ -298,6 +311,70 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
             }}
           >
             SOA:{metrics.soa}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- NEW COMPONENT FOR CLUSTERED BAR (Bar Chart) ---
+  const ClusteredCategoryRow = ({ label, metrics }) => {
+    // Determine max value to scale the bars relative to each other in this row
+    const maxVal = Math.max(metrics.soet, metrics.sop, metrics.soa, 1);
+    const getBarWidth = count => `${Math.max((count / maxVal) * 100, 2)}%`; // Min width 2% for visibility
+
+    return (
+      <div className="mb-6 last:mb-0">
+        <div className="flex justify-between items-end mb-2">
+          <span className="text-sm font-bold capitalize" style={{ color: "#111827" }}>
+            {label}
+          </span>
+          <span className="text-xs font-medium" style={{ color: "#6b7280" }}>
+            Total: {metrics.count}
+          </span>
+        </div>
+        <div className="space-y-1.5 pl-2 border-l-2" style={{ borderColor: "#e5e7eb" }}>
+          {/* SOET Bar */}
+          <div className="flex items-center gap-2">
+            <div
+              className="h-4 rounded-r flex items-center justify-end px-1 transition-all duration-500"
+              style={{
+                width: getBarWidth(metrics.soet),
+                backgroundColor: "#2563eb",
+                minWidth: "4px",
+              }}
+            ></div>
+            <span className="text-[10px] font-medium" style={{ color: "#4b5563" }}>
+              {metrics.soet}
+            </span>
+          </div>
+          {/* SOP Bar */}
+          <div className="flex items-center gap-2">
+            <div
+              className="h-4 rounded-r flex items-center justify-end px-1 transition-all duration-500"
+              style={{
+                width: getBarWidth(metrics.sop),
+                backgroundColor: "#22c55e",
+                minWidth: "4px",
+              }}
+            ></div>
+            <span className="text-[10px] font-medium" style={{ color: "#4b5563" }}>
+              {metrics.sop}
+            </span>
+          </div>
+          {/* SOA Bar */}
+          <div className="flex items-center gap-2">
+            <div
+              className="h-4 rounded-r flex items-center justify-end px-1 transition-all duration-500"
+              style={{
+                width: getBarWidth(metrics.soa),
+                backgroundColor: "#dc2626",
+                minWidth: "4px",
+              }}
+            ></div>
+            <span className="text-[10px] font-medium" style={{ color: "#4b5563" }}>
+              {metrics.soa}
+            </span>
           </div>
         </div>
       </div>
@@ -428,24 +505,63 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                     <h3 className="text-lg font-semibold" style={{ color: "#111827" }}>
                       Category School Distribution
                     </h3>
-                    <button
-                      onClick={e => handleDownload(e, categoryGraphRef, "Category_Distribution")}
-                      className="p-2 rounded-full hover:bg-indigo-100 transition-all shadow-sm border"
-                      style={{
-                        backgroundColor: "#eef2ff",
-                        color: "#4f46e5",
-                        borderColor: "#e0e7ff",
-                      }}
-                      title="Download as Image"
-                    >
-                      <Download size={18} />
-                    </button>
+                    <div className="flex gap-2">
+                      {/* TOGGLE BUTTON FOR CHART TYPE */}
+                      <button
+                        onClick={() =>
+                          setCategoryChartType(prev => (prev === "stacked" ? "bar" : "stacked"))
+                        }
+                        className="p-2 rounded-full hover:bg-gray-100 transition-all shadow-sm border"
+                        style={{
+                          backgroundColor: "#f9fafb",
+                          color: "#374151",
+                          borderColor: "#e5e7eb",
+                        }}
+                        title="Toggle Chart Type"
+                      >
+                        <BarChart2 size={18} />
+                      </button>
+                      <button
+                        onClick={e => handleDownload(e, categoryGraphRef, "Category_Distribution")}
+                        className="p-2 rounded-full hover:bg-indigo-100 transition-all shadow-sm border"
+                        style={{
+                          backgroundColor: "#eef2ff",
+                          color: "#4f46e5",
+                          borderColor: "#e0e7ff",
+                        }}
+                        title="Download as Image"
+                      >
+                        <Download size={18} />
+                      </button>
+                    </div>
                   </div>
+
                   <div className="space-y-6">
-                    <CategoryRow label="Sports" metrics={stats.categoryMetrics.Sports} />
-                    <CategoryRow label="Cultural" metrics={stats.categoryMetrics.Cultural} />
-                    <CategoryRow label="Technical" metrics={stats.categoryMetrics.Technical} />
+                    {categoryChartType === "stacked" ? (
+                      <>
+                        <CategoryRow label="Sports" metrics={stats.categoryMetrics.Sports} />
+                        <CategoryRow label="Cultural" metrics={stats.categoryMetrics.Cultural} />
+                        <CategoryRow label="Technical" metrics={stats.categoryMetrics.Technical} />
+                      </>
+                    ) : (
+                      <>
+                        <ClusteredCategoryRow
+                          label="Sports"
+                          metrics={stats.categoryMetrics.Sports}
+                        />
+                        <ClusteredCategoryRow
+                          label="Cultural"
+                          metrics={stats.categoryMetrics.Cultural}
+                        />
+                        <ClusteredCategoryRow
+                          label="Technical"
+                          metrics={stats.categoryMetrics.Technical}
+                        />
+                      </>
+                    )}
                   </div>
+
+                  {/* Legend - Only needed for stacked or to explain colors generally */}
                   <div
                     className="flex justify-center gap-6 mt-6 pt-4 border-t"
                     style={{ borderColor: "#f9fafb" }}
@@ -516,23 +632,14 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                           <span className="font-medium" style={{ color: "#4b5563" }}>
                             {dept}
                           </span>
-
-                          {/* UPDATED FOR PADDING CONTROL: 
-                           Change paddingLeft / paddingRight below to shift the number.
-                           Current: 12px Left, 12px Right (Centered)
-                        */}
                           <span
                             style={{
                               backgroundColor: "#eef2ff",
                               color: "#4338ca",
                               borderRadius: "12px",
                               height: "24px",
-
-                              // 👇 ADJUST THESE TO SHIFT TEXT LEFT OR RIGHT
                               paddingLeft: "12px",
                               paddingRight: "12px",
-                              paddingBottom: "5px",
-
                               fontSize: "11px",
                               fontWeight: "bold",
                               display: "inline-flex",
