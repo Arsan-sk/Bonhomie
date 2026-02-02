@@ -45,6 +45,8 @@ import AdminNotifications from './pages/admin/AdminNotifications'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminCertificates from './pages/admin/AdminCertificates'
 import CertificateVerify from './pages/CertificateVerify'
+import ChatLayout from './components/chat/ChatLayout'
+import ChatWindow from './components/chat/ChatWindow'
 import NotFound from './pages/NotFound'
 import { AuthProvider } from './context/AuthContext'
 
@@ -81,6 +83,9 @@ function App() {
           <Route path="my-events" element={<StudentMyEvents />} />
           <Route path="updates" element={<StudentUpdates />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="chats" element={<ChatLayout />}>
+            <Route path=":chatId" element={<ChatWindow />} />
+          </Route>
         </Route>
 
         {/* Admin Dashboard - Protected (Admin Only) */}
@@ -102,6 +107,9 @@ function App() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="certificates" element={<AdminCertificates />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="chats" element={<ChatLayout />}>
+            <Route path=":chatId" element={<ChatWindow />} />
+          </Route>
         </Route>
 
         {/* Coordinator Dashboard - Protected */}
@@ -121,6 +129,9 @@ function App() {
           <Route path="browse-events/:id/register" element={<EventRegistration />} />
           <Route path="updates" element={<StudentUpdates />} />
           <Route path="my-registrations" element={<StudentMyEvents />} />
+          <Route path="chats" element={<ChatLayout />}>
+            <Route path=":chatId" element={<ChatWindow />} />
+          </Route>
         </Route>
 
         {/* 404 Not Found - Catch all unmatched routes */}

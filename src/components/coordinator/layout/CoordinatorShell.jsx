@@ -1,13 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity } from 'lucide-react'
+import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity, MessageCircle } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 
 export default function CoordinatorShell() {
     const [sidebarOpen, setSidebarOpen] = useState(false)
-    const { signOut, profile } = useAuth()
+    const { signOut, profile, supabase } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
+    const [totalUnread, setTotalUnread] = useState(0)
+
+    useEffect(() => {
+        if (!profile || !supabase) {
+            console.log('[CoordinatorShell] Skipping unread fetch - profile:', !!profile, 'supabase:', !!supabase);
+            return;
+        }
+
+        const fetchUnread = async () => {
+            try {
+                console.log('[CoordinatorShell] Fetching unread for profile:', profile.id);
+                const { data, error } = await supabase.rpc('get_my_chats_summary');
+                
+                console.log('[CoordinatorShell] RPC Response - data:', data, 'error:', error);
+                
+                if (error) {
+                    console.error('[CoordinatorShell] Error fetching unread:', error);
+                    return;
+                }
+                if (data && Array.isArray(data)) {
+                    const total = data.reduce((acc, chat) => acc + (Number(chat.unread_count) || 0), 0);
+                    console.log('[CoordinatorShell] Total unread:', total);
+                    setTotalUnread(total);
+                }
+            } catch (err) {
+                console.error('[CoordinatorShell] Fetch unread error:', err);
+            }
+        };
+
+        // Initial fetch
+        fetchUnread();
+
+        // Poll every 15 seconds for updates
+        const interval = setInterval(fetchUnread, 15000);
+
+        // Real-time subscription for instant updates when messages arrive OR are read
+        const channel = supabase
+            .channel('coordinator-chat-notifications')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+                () => {
+                    fetchUnread();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'chat_members' },
+                () => {
+                    // Refetch when messages are marked as read (last_read_at updated)
+                    fetchUnread();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            clearInterval(interval);
+            channel.unsubscribe();
+        };
+    }, [profile, supabase]);
 
     const handleSignOut = async () => {
         try {
@@ -26,6 +86,7 @@ export default function CoordinatorShell() {
         { name: 'Browse Events', href: '/coordinator/browse-events', icon: Calendar },
         { name: 'Updates', href: '/coordinator/updates', icon: Activity },
         { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
+        { name: 'Chats', href: '/coordinator/chats', icon: MessageCircle },
     ]
 
     return (
@@ -71,6 +132,11 @@ export default function CoordinatorShell() {
                                 >
                                     <item.icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-purple-600' : 'text-purple-300 group-hover:text-white'}`} />
                                     {item.name}
+                                    {item.name === 'Chats' && totalUnread > 0 && (
+                                        <span className="ml-auto bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white shadow-sm min-w-[20px] text-center">
+                                            {totalUnread > 99 ? '99+' : totalUnread}
+                                        </span>
+                                    )}
                                 </NavLink>
                             )
                         })}

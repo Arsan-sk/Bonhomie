@@ -25,15 +25,23 @@ export default function Navbar() {
     { name: "Events", path: "/events" },
     ...(user
       ? [
-          {
-            name: "Dashboard",
-            path: isAdmin
-              ? "/admin/dashboard"
-              : isFaculty
-                ? "/faculty/dashboard"
-                : "/student/dashboard",
-          },
-        ]
+        {
+          name: "Dashboard",
+          path: isAdmin
+            ? "/admin/dashboard"
+            : isFaculty
+              ? "/faculty/dashboard"
+              : "/student/dashboard",
+        },
+        {
+          name: "Chats",
+          path: isAdmin
+            ? "/admin/chats"
+            : isFaculty
+              ? "/coordinator/chats"
+              : "/student/chats",
+        },
+      ]
       : []),
   ];
 

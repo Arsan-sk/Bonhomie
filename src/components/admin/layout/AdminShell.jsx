@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
     LayoutDashboard,
@@ -15,7 +15,8 @@ import {
     X,
     Search,
     User,
-    ChevronDown
+    ChevronDown,
+    MessageCircle
 } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 import clsx from 'clsx'
@@ -29,14 +30,76 @@ const navigation = [
     { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
     { name: 'Certificates', href: '/admin/certificates', icon: Award },
     { name: 'Notifications', href: '/admin/notifications', icon: Bell },
+    { name: 'Chats', href: '/admin/chats', icon: MessageCircle },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 
 export default function AdminShell() {
-    const { signOut, user } = useAuth()
+    const { signOut, user, profile, supabase } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const [totalUnread, setTotalUnread] = useState(0)
+
+    // Fetch unread count for sidebar bubble
+    useEffect(() => {
+        if (!profile || !supabase) {
+            console.log('[AdminShell] Skipping unread fetch - profile:', !!profile, 'supabase:', !!supabase);
+            return;
+        }
+
+        const fetchUnread = async () => {
+            try {
+                console.log('[AdminShell] Fetching unread for profile:', profile.id);
+                const { data, error } = await supabase.rpc('get_my_chats_summary');
+                
+                console.log('[AdminShell] RPC Response - data:', data, 'error:', error);
+                
+                if (error) {
+                    console.error('[AdminShell] Error fetching unread:', error);
+                    return;
+                }
+                if (data && Array.isArray(data)) {
+                    const total = data.reduce((acc, chat) => acc + (Number(chat.unread_count) || 0), 0);
+                    console.log('[AdminShell] Total unread:', total);
+                    setTotalUnread(total);
+                }
+            } catch (err) {
+                console.error('[AdminShell] Fetch unread error:', err);
+            }
+        };
+
+        // Initial fetch
+        fetchUnread();
+
+        // Poll every 15 seconds for updates
+        const interval = setInterval(fetchUnread, 15000);
+
+        // Real-time subscription for instant updates when messages arrive OR are read
+        const channel = supabase
+            .channel('admin-chat-notifications')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+                () => {
+                    fetchUnread();
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'chat_members' },
+                () => {
+                    // Refetch when messages are marked as read (last_read_at updated)
+                    fetchUnread();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            clearInterval(interval);
+            channel.unsubscribe();
+        };
+    }, [profile, supabase]);
 
     const handleSignOut = async () => {
         try {
@@ -77,6 +140,12 @@ export default function AdminShell() {
                             >
                                 <item.icon className={clsx("h-5 w-5 shrink-0", isActive ? "text-white" : "text-slate-500 group-hover:text-white")} />
                                 {item.name}
+                                {/* Unread Bubble for Chats */}
+                                {item.name === 'Chats' && totalUnread > 0 && (
+                                    <span className="ml-auto bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                                        {totalUnread > 99 ? '99+' : totalUnread}
+                                    </span>
+                                )}
                             </Link>
                         )
                     })}
@@ -129,6 +198,12 @@ export default function AdminShell() {
                                 >
                                     <item.icon className="h-5 w-5" />
                                     {item.name}
+                                    {/* Unread Bubble for Chats */}
+                                    {item.name === 'Chats' && totalUnread > 0 && (
+                                        <span className="ml-auto bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                                            {totalUnread > 99 ? '99+' : totalUnread}
+                                        </span>
+                                    )}
                                 </Link>
                             ))}
                         </div>
@@ -169,8 +244,9 @@ export default function AdminShell() {
                 </header>
 
                 {/* 3. Content Area */}
-                <main className="py-8">
-                    <div className="px-4 sm:px-6 lg:px-8">
+                {/* Remove padding for chat pages to allow full-height chat layout */}
+                <main className={location.pathname.includes('/chats') ? '' : 'py-8'}>
+                    <div className={location.pathname.includes('/chats') ? '' : 'px-4 sm:px-6 lg:px-8'}>
                         <Outlet />
                     </div>
                 </main>
