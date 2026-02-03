@@ -1137,13 +1137,31 @@ export default function CoordinatorEventManage() {
         )
         .eq("event_id", id)
         .eq("status", "confirmed")
-        .order("registered_at", { ascending: true });
+        .order("registered_at", { ascending: true }); // Primary fetch order
 
       if (error) throw error;
       if (!registrations || registrations.length === 0) {
         alert("No confirmed participants to export");
         return;
       }
+
+      // ---------------------------------------------------------
+      //  SORT BY GENDER (Male First -> Then Female/Other)
+      // ---------------------------------------------------------
+      registrations.sort((a, b) => {
+        const genderA = a.user?.gender?.toLowerCase() || "";
+        const genderB = b.user?.gender?.toLowerCase() || "";
+
+        // If A is male and B is NOT male, A comes first (-1)
+        if (genderA === "male" && genderB !== "male") return -1;
+
+        // If A is NOT male and B is male, B comes first (1)
+        if (genderA !== "male" && genderB === "male") return 1;
+
+        // If genders are the same, keep original order
+        return 0;
+      });
+      // ---------------------------------------------------------
 
       console.log("Fetched registrations:", registrations.length);
 
@@ -1179,12 +1197,12 @@ export default function CoordinatorEventManage() {
       const isGroupEvent = event.subcategory?.toLowerCase() === "group";
 
       if (isGroupEvent) {
-        // GROUP EVENT CSV - Only process team leaders with team_members
+        // GROUP EVENT CSV - REMOVED EMAIL COLUMN
         csvContent +=
-          "Team No,Member No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n";
+          "Team No,Member No,Roll Number,Name,School,Department,Year of Study,Gender,Phone Number\n";
 
         let teamNumber = 0;
-        // Filter to only team leaders (those with non-empty team_members array)
+
         const teamLeaders = registrations.filter(
           reg => reg.team_members && reg.team_members.length > 0
         );
@@ -1193,26 +1211,29 @@ export default function CoordinatorEventManage() {
           teamNumber++;
           const teamMembers = reg.team_members || [];
 
-          // Team Leader (Member 1) - show team number
+          // Team Leader (Member 1)
           const leader = reg.user;
           if (leader) {
-            csvContent += `${teamNumber},1,${escapeCSV(leader.roll_number)},${escapeCSV(leader.full_name)},${escapeCSV(leader.college_email)},${escapeCSV(leader.school)},${escapeCSV(leader.department)},${escapeCSV(leader.year_of_study)},${escapeCSV(leader.gender)},${escapeCSV(leader.phone)}\n`;
+            // Removed leader.college_email
+            csvContent += `${teamNumber},1,${escapeCSV(leader.roll_number)},${escapeCSV(leader.full_name)},${escapeCSV(leader.school)},${escapeCSV(leader.department)},${escapeCSV(leader.year_of_study)},${escapeCSV(leader.gender)},${escapeCSV(leader.phone)}\n`;
           }
 
-          // Team Members (2, 3, ...) - blank team number for clean look
+          // Team Members (2, 3, ...)
           teamMembers.forEach((member, idx) => {
-            csvContent += `,${idx + 2},${escapeCSV(member.roll_number)},${escapeCSV(member.full_name || member.name)},${escapeCSV(member.college_email || member.email)},${escapeCSV(member.school)},${escapeCSV(member.department)},${escapeCSV(member.year_of_study)},${escapeCSV(member.gender)},${escapeCSV(member.phone)}\n`;
+            // Removed member.email
+            csvContent += `,${idx + 2},${escapeCSV(member.roll_number)},${escapeCSV(member.full_name || member.name)},${escapeCSV(member.school)},${escapeCSV(member.department)},${escapeCSV(member.year_of_study)},${escapeCSV(member.gender)},${escapeCSV(member.phone)}\n`;
           });
         });
       } else {
-        // INDIVIDUAL EVENT CSV - remove Serial No for consistency
+        // INDIVIDUAL EVENT CSV - REMOVED EMAIL COLUMN
         csvContent +=
-          "Member No,Roll Number,Name,Email,School,Department,Year of Study,Gender,Phone Number\n";
+          "Member No,Roll Number,Name,School,Department,Year of Study,Gender,Phone Number\n";
 
         registrations.forEach((reg, index) => {
           const user = reg.user;
           if (user) {
-            csvContent += `${index + 1},${escapeCSV(user.roll_number)},${escapeCSV(user.full_name)},${escapeCSV(user.college_email)},${escapeCSV(user.school)},${escapeCSV(user.department)},${escapeCSV(user.year_of_study)},${escapeCSV(user.gender)},${escapeCSV(user.phone)}\n`;
+            // Removed user.college_email
+            csvContent += `${index + 1},${escapeCSV(user.roll_number)},${escapeCSV(user.full_name)},${escapeCSV(user.school)},${escapeCSV(user.department)},${escapeCSV(user.year_of_study)},${escapeCSV(user.gender)},${escapeCSV(user.phone)}\n`;
           }
         });
       }
