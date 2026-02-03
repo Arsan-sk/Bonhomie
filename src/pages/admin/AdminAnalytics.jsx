@@ -10,7 +10,7 @@ import {
   Activity,
   Download,
   BarChart2,
-} from "lucide-react"; // Added BarChart2
+} from "lucide-react";
 import {
   generateIndividualParticipantsCSV,
   generateTeamParticipantsCSV,
@@ -60,7 +60,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     fetchPaymentStats();
   }, [selectedEvent]);
 
-  // --- HTML2CANVAS DOWNLOAD HANDLER ---
+  // --- HTML2CANVAS DOWNLOAD HANDLER WITH WATERMARK ---
   const handleDownload = async (e, ref, fileName) => {
     e.preventDefault();
     e.stopPropagation();
@@ -71,25 +71,60 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
       console.log(`Downloading ${fileName}...`);
       const element = ref.current;
 
+      // 1. Tag the element so we can find this specific one in the clone
+      element.setAttribute("data-capture-target", "true");
+
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
         onclone: clonedDoc => {
-          // 1. Hide buttons
-          const buttons = clonedDoc.querySelectorAll("button");
-          buttons.forEach(btn => (btn.style.display = "none"));
+          // Find the specific cloned element using our tag
+          const clonedElement = clonedDoc.querySelector('[data-capture-target="true"]');
 
-          // 2. Expand scrollable areas so full list captures
-          const scrollables = clonedDoc.querySelectorAll(".overflow-y-auto");
-          scrollables.forEach(div => {
-            div.style.overflow = "visible";
-            div.style.maxHeight = "none";
-            div.style.height = "auto";
-          });
+          if (clonedElement) {
+            // A. Hide buttons
+            const buttons = clonedElement.querySelectorAll("button");
+            buttons.forEach(btn => (btn.style.display = "none"));
+
+            // B. Expand scrollable areas
+            const scrollables = clonedElement.querySelectorAll(".overflow-y-auto");
+            scrollables.forEach(div => {
+              div.style.overflow = "visible";
+              div.style.maxHeight = "none";
+              div.style.height = "auto";
+            });
+
+            // C. ADD WATERMARK "By AIKTC"
+            const watermark = clonedDoc.createElement("div");
+            watermark.innerHTML = `
+  <div style="font-size: 10px; font-weight: bold; color: #1f2937; text-transform: uppercase; letter-spacing: 1.5px;">
+    Anjuman-I-Islam's Kalsekar Technical Campus
+  </div>
+  <div style="font-size: 16px; font-weight: bold; color: #1f2937; margin-top: 2px;">
+    Bonhomie 2026
+  </div>
+`;
+            // Inline styles for the watermark
+            watermark.style.textAlign = "center";
+            watermark.style.width = "100%";
+            watermark.style.fontSize = "12px";
+            watermark.style.fontWeight = "bold";
+            watermark.style.color = "#9ca3af"; // Gray color
+            watermark.style.textTransform = "uppercase";
+            watermark.style.letterSpacing = "1.5px";
+            watermark.style.marginBottom = "10px";
+            watermark.style.fontFamily = "sans-serif";
+
+            // Insert at the very top of the card
+            clonedElement.prepend(watermark);
+          }
         },
       });
+
+      // 2. Remove the tag from the real DOM
+      element.removeAttribute("data-capture-target");
 
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -101,6 +136,8 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     } catch (err) {
       console.error("Export failed:", err);
       alert("Export failed. Check console for details.");
+      // Ensure attribute is removed even if error occurs
+      if (ref.current) ref.current.removeAttribute("data-capture-target");
     }
   };
 
@@ -319,9 +356,8 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
 
   // --- NEW COMPONENT FOR CLUSTERED BAR (Bar Chart) ---
   const ClusteredCategoryRow = ({ label, metrics }) => {
-    // Determine max value to scale the bars relative to each other in this row
     const maxVal = Math.max(metrics.soet, metrics.sop, metrics.soa, 1);
-    const getBarWidth = count => `${Math.max((count / maxVal) * 100, 2)}%`; // Min width 2% for visibility
+    const getBarWidth = count => `${Math.max((count / maxVal) * 100, 2)}%`;
 
     return (
       <div className="mb-6 last:mb-0">
@@ -411,13 +447,21 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab("participation")}
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "participation" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "participation"
+                ? "border-indigo-500 text-indigo-600"
+                : "border-transparent text-gray-500"
+            }`}
           >
             Participation Analytics
           </button>
           <button
             onClick={() => setActiveTab("payment")}
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === "payment" ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500"}`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "payment"
+                ? "border-indigo-500 text-indigo-600"
+                : "border-transparent text-gray-500"
+            }`}
           >
             Payment Analytics
           </button>
@@ -561,7 +605,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                     )}
                   </div>
 
-                  {/* Legend - Only needed for stacked or to explain colors generally */}
+                  {/* Legend */}
                   <div
                     className="flex justify-center gap-6 mt-6 pt-4 border-t"
                     style={{ borderColor: "#f9fafb" }}
@@ -640,6 +684,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                               height: "24px",
                               paddingLeft: "12px",
                               paddingRight: "12px",
+                              paddingBottom: "10px",
                               fontSize: "11px",
                               fontWeight: "bold",
                               display: "inline-flex",
@@ -677,7 +722,10 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                         <div
                           className="relative w-full bg-gray-100 rounded-full h-7 flex overflow-hidden shadow-inner border border-gray-200"
                           style={{
-                            width: `${Math.max((event.count / stats.eventPopularity[0].count) * 100, 5)}%`,
+                            width: `${Math.max(
+                              (event.count / stats.eventPopularity[0].count) * 100,
+                              5
+                            )}%`,
                           }}
                         >
                           <div
