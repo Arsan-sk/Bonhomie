@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity, MessageCircle } from 'lucide-react'
+import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity, MessageCircle, Flame } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 
 export default function CoordinatorShell() {
@@ -87,6 +87,7 @@ export default function CoordinatorShell() {
         { name: 'Updates', href: '/coordinator/updates', icon: Activity },
         { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
         { name: 'Chats', href: '/coordinator/chats', icon: MessageCircle },
+        { name: 'Hot Topics', href: '/coordinator/hot-topics', icon: Flame },
     ]
 
     return (

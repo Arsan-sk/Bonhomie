@@ -10,7 +10,8 @@ import {
     LogOut,
     Menu,
     X,
-    MessageCircle
+    MessageCircle,
+    Flame
 } from 'lucide-react'
 
 export default function StudentShell() {
@@ -100,6 +101,7 @@ export default function StudentShell() {
         { name: 'Updates', href: '/student/updates', icon: Activity },
         { name: 'My Events', href: '/student/my-events', icon: Trophy },
         { name: 'Chats', href: '/student/chats', icon: MessageCircle },
+        { name: 'Hot Topics', href: '/student/hot-topics', icon: Flame },
     ]
 
     const isActive = (path) => location.pathname === path

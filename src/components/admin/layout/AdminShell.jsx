@@ -16,7 +16,8 @@ import {
     Search,
     User,
     ChevronDown,
-    MessageCircle
+    MessageCircle,
+    Flame
 } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
 import clsx from 'clsx'
@@ -29,6 +30,7 @@ const navigation = [
     { name: 'Users', href: '/admin/users', icon: GraduationCap },
     { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
     { name: 'Certificates', href: '/admin/certificates', icon: Award },
+    { name: 'Zaika', href: '/admin/zaika', icon: Flame },
     { name: 'Notifications', href: '/admin/notifications', icon: Bell },
     { name: 'Chats', href: '/admin/chats', icon: MessageCircle },
     { name: 'Settings', href: '/admin/settings', icon: Settings },

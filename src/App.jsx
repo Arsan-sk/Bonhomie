@@ -31,6 +31,11 @@ import StudentEvents from './pages/student/StudentEvents'
 import StudentMyEvents from './pages/student/StudentMyEvents'
 import StudentUpdates from './pages/student/StudentUpdates'
 
+// Hot Topics & Zaika
+import HotTopics from './pages/HotTopics'
+import ZaikaMain from './pages/zaika/ZaikaMain'
+import AdminZaikaDashboard from './pages/admin/AdminZaikaDashboard'
+
 // Admin Pages
 import AdminDashboard from './pages/dashboards/AdminDashboard'
 import AdminStats from './pages/dashboards/AdminStats'
@@ -86,6 +91,8 @@ function App() {
           <Route path="chats" element={<ChatLayout />}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
+          <Route path="hot-topics" element={<HotTopics />} />
+          <Route path="hot-topics/zaika" element={<ZaikaMain />} />
         </Route>
 
         {/* Admin Dashboard - Protected (Admin Only) */}
@@ -110,6 +117,7 @@ function App() {
           <Route path="chats" element={<ChatLayout />}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
+          <Route path="zaika" element={<AdminZaikaDashboard />} />
         </Route>
 
         {/* Coordinator Dashboard - Protected */}
@@ -132,6 +140,8 @@ function App() {
           <Route path="chats" element={<ChatLayout />}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
+          <Route path="hot-topics" element={<HotTopics />} />
+          <Route path="hot-topics/zaika" element={<ZaikaMain />} />
         </Route>
 
         {/* 404 Not Found - Catch all unmatched routes */}
