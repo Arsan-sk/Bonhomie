@@ -20,28 +20,35 @@ import {
     Flame
 } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
+import { useFeatureFlags } from '../../../context/FeatureFlagsContext'
 import clsx from 'clsx'
 
-const navigation = [
+const allNavigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Events', href: '/admin/events', icon: Calendar },
     { name: 'Advanced Management', href: '/admin/advanced-management', icon: Search },
     { name: 'Coordinators', href: '/admin/coordinators', icon: Users },
     { name: 'Users', href: '/admin/users', icon: GraduationCap },
-    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
-    { name: 'Certificates', href: '/admin/certificates', icon: Award },
-    { name: 'Zaika', href: '/admin/zaika', icon: Flame },
+    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, featureKey: 'analytics' },
+    { name: 'Certificates', href: '/admin/certificates', icon: Award, featureKey: 'certificates' },
+    { name: 'Zaika', href: '/admin/zaika', icon: Flame, featureKey: 'zaika' },
     { name: 'Notifications', href: '/admin/notifications', icon: Bell },
-    { name: 'Chats', href: '/admin/chats', icon: MessageCircle },
+    { name: 'Chats', href: '/admin/chats', icon: MessageCircle, featureKey: 'chat' },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
 ]
 
 export default function AdminShell() {
     const { signOut, user, profile, supabase } = useAuth()
+    const { isFeatureActive } = useFeatureFlags()
     const navigate = useNavigate()
     const location = useLocation()
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [totalUnread, setTotalUnread] = useState(0)
+
+    // Filter navigation based on feature flags
+    const navigation = allNavigation.filter(item => 
+        !item.featureKey || isFeatureActive(item.featureKey)
+    )
 
     // Fetch unread count for sidebar bubble
     useEffect(() => {

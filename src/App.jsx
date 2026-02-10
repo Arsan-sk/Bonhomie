@@ -17,6 +17,7 @@ import CoordinatorAnalytics from './pages/coordinator/CoordinatorAnalytics'
 import ProfilePage from './components/profile/ProfilePage'
 import CoordinatorShell from './components/coordinator/layout/CoordinatorShell'
 import ProtectedRoute from './components/auth/ProtectedRoute'
+import FeatureRoute from './components/auth/FeatureRoute'
 
 // Role-based Route Guards
 import AdminRoute from './components/AdminRoute'
@@ -54,10 +55,12 @@ import ChatLayout from './components/chat/ChatLayout'
 import ChatWindow from './components/chat/ChatWindow'
 import NotFound from './pages/NotFound'
 import { AuthProvider } from './context/AuthContext'
+import { FeatureFlagsProvider } from './context/FeatureFlagsContext'
 
 function App() {
   return (
     <AuthProvider>
+      <FeatureFlagsProvider>
       <div id="top"></div>
       <Routes>
         {/* Public & Student Routes wrapped in Main Layout */}
@@ -88,11 +91,11 @@ function App() {
           <Route path="my-events" element={<StudentMyEvents />} />
           <Route path="updates" element={<StudentUpdates />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="chats" element={<ChatLayout />}>
+          <Route path="chats" element={<FeatureRoute featureKey="chat"><ChatLayout /></FeatureRoute>}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
-          <Route path="hot-topics" element={<HotTopics />} />
-          <Route path="hot-topics/zaika" element={<ZaikaMain />} />
+          <Route path="hot-topics" element={<FeatureRoute featureKey="hot_topics"><HotTopics /></FeatureRoute>} />
+          <Route path="hot-topics/zaika" element={<FeatureRoute featureKey="zaika"><ZaikaMain /></FeatureRoute>} />
         </Route>
 
         {/* Admin Dashboard - Protected (Admin Only) */}
@@ -114,10 +117,10 @@ function App() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="certificates" element={<AdminCertificates />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="chats" element={<ChatLayout />}>
+          <Route path="chats" element={<FeatureRoute featureKey="chat"><ChatLayout /></FeatureRoute>}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
-          <Route path="zaika" element={<AdminZaikaDashboard />} />
+          <Route path="zaika" element={<FeatureRoute featureKey="zaika"><AdminZaikaDashboard /></FeatureRoute>} />
         </Route>
 
         {/* Coordinator Dashboard - Protected */}
@@ -137,16 +140,17 @@ function App() {
           <Route path="browse-events/:id/register" element={<EventRegistration />} />
           <Route path="updates" element={<StudentUpdates />} />
           <Route path="my-registrations" element={<StudentMyEvents />} />
-          <Route path="chats" element={<ChatLayout />}>
+          <Route path="chats" element={<FeatureRoute featureKey="chat"><ChatLayout /></FeatureRoute>}>
             <Route path=":chatId" element={<ChatWindow />} />
           </Route>
-          <Route path="hot-topics" element={<HotTopics />} />
-          <Route path="hot-topics/zaika" element={<ZaikaMain />} />
+          <Route path="hot-topics" element={<FeatureRoute featureKey="hot_topics"><HotTopics /></FeatureRoute>} />
+          <Route path="hot-topics/zaika" element={<FeatureRoute featureKey="zaika"><ZaikaMain /></FeatureRoute>} />
         </Route>
 
         {/* 404 Not Found - Catch all unmatched routes */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </FeatureFlagsProvider>
     </AuthProvider>
   )
 }

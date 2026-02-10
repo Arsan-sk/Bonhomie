@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Calendar, BarChart3, User, LogOut, Menu, X, Bell, Activity, MessageCircle, Flame } from 'lucide-react'
 import { useAuth } from '../../../context/AuthContext'
+import { useFeatureFlags } from '../../../context/FeatureFlagsContext'
 
 export default function CoordinatorShell() {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const { signOut, profile, supabase } = useAuth()
+    const { isFeatureActive } = useFeatureFlags()
     const navigate = useNavigate()
     const location = useLocation()
     const [totalUnread, setTotalUnread] = useState(0)
@@ -79,16 +81,21 @@ export default function CoordinatorShell() {
         navigate('/login')
     }
 
-    const navigation = [
+    const allNavigation = [
         { name: 'Dashboard', href: '/coordinator/dashboard', icon: LayoutDashboard },
         { name: 'Manage Events', href: '/coordinator/events', icon: Calendar },
         { name: 'Analytics', href: '/coordinator/analytics', icon: BarChart3 },
         { name: 'Browse Events', href: '/coordinator/browse-events', icon: Calendar },
         { name: 'Updates', href: '/coordinator/updates', icon: Activity },
         { name: 'My Registrations', href: '/coordinator/my-registrations', icon: User },
-        { name: 'Chats', href: '/coordinator/chats', icon: MessageCircle },
-        { name: 'Hot Topics', href: '/coordinator/hot-topics', icon: Flame },
+        { name: 'Chats', href: '/coordinator/chats', icon: MessageCircle, featureKey: 'chat' },
+        { name: 'Hot Topics', href: '/coordinator/hot-topics', icon: Flame, featureKey: 'hot_topics' },
     ]
+
+    // Filter navigation based on feature flags
+    const navigation = allNavigation.filter(item => 
+        !item.featureKey || isFeatureActive(item.featureKey)
+    )
 
     return (
         <div className="min-h-screen bg-gray-50 flex">

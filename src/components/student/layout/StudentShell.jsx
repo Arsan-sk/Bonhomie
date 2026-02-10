@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
+import { useFeatureFlags } from '../../../context/FeatureFlagsContext'
 import {
     LayoutDashboard,
     Calendar,
@@ -18,6 +19,7 @@ export default function StudentShell() {
     const location = useLocation()
     const navigate = useNavigate()
     const { user, profile, signOut, supabase } = useAuth()
+    const { isFeatureActive } = useFeatureFlags()
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [totalUnread, setTotalUnread] = useState(0)
 
@@ -95,14 +97,19 @@ export default function StudentShell() {
         navigate('/login')
     }
 
-    const navigation = [
+    const allNavigation = [
         { name: 'Dashboard', href: '/student/dashboard', icon: LayoutDashboard },
         { name: 'Events', href: '/student/events', icon: Calendar },
         { name: 'Updates', href: '/student/updates', icon: Activity },
         { name: 'My Events', href: '/student/my-events', icon: Trophy },
-        { name: 'Chats', href: '/student/chats', icon: MessageCircle },
-        { name: 'Hot Topics', href: '/student/hot-topics', icon: Flame },
+        { name: 'Chats', href: '/student/chats', icon: MessageCircle, featureKey: 'chat' },
+        { name: 'Hot Topics', href: '/student/hot-topics', icon: Flame, featureKey: 'hot_topics' },
     ]
+
+    // Filter navigation based on feature flags
+    const navigation = allNavigation.filter(item => 
+        !item.featureKey || isFeatureActive(item.featureKey)
+    )
 
     const isActive = (path) => location.pathname === path
 
