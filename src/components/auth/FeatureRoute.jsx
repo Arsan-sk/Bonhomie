@@ -4,7 +4,7 @@
  */
 
 import { Navigate } from 'react-router-dom'
-import { useFeatureFlags } from '../context/FeatureFlagsContext'
+import { useFeatureFlags } from '../../context/FeatureFlagsContext'
 
 /**
  * Route guard that checks if a feature is enabled
