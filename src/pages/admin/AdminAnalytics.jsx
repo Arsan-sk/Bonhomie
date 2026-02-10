@@ -485,20 +485,17 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                     <p className="text-4xl font-bold">{stats.totalRegistrations}</p>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-[10px] text-center mt-6">
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      CONFIRMED
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.confirmed}</b>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg py-2 px-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
+                      <div className="uppercase opacity-75 font-semibold">CONFIRMED</div>
+                      <b className="text-lg text-green-300">{stats.statusBreakdown.confirmed}</b>
                     </div>
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      PENDING
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.pending}</b>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg py-2 px-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
+                      <div className="uppercase opacity-75 font-semibold">PENDING</div>
+                      <b className="text-lg text-blue-300">{stats.statusBreakdown.pending}</b>
                     </div>
-                    <div className="bg-white/10 rounded py-2 border border-white/10">
-                      REJECTED
-                      <br />
-                      <b className="text-sm">{stats.statusBreakdown.rejected}</b>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg py-2 px-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
+                      <div className="uppercase opacity-75 font-semibold">REJECTED</div>
+                      <b className="text-lg text-red-300">{stats.statusBreakdown.rejected}</b>
                     </div>
                   </div>
                 </div>
