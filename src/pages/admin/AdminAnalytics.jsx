@@ -10,6 +10,7 @@ import {
   Activity,
   Download,
   BarChart2,
+  ChevronDown,
 } from "lucide-react";
 import {
   generateIndividualParticipantsCSV,
@@ -27,6 +28,7 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
   const [selectedEvent, setSelectedEvent] = useState(eventIdFilter || null);
   const [events, setEvents] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
 
   // New state for chart toggle
   const [categoryChartType, setCategoryChartType] = useState("stacked"); // "stacked" or "bar"
@@ -59,6 +61,227 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
     fetchParticipationStats();
     fetchPaymentStats();
   }, [selectedEvent]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showExportDropdown && !e.target.closest('.export-dropdown-container')) {
+        setShowExportDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExportDropdown]);
+
+  // Handle CSV Export
+  const handleExportCSV = async (exportType) => {
+    setIsExporting(true);
+    setShowExportDropdown(false);
+    try {
+      // Fetch all registrations with required data
+      let allRegistrations = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase
+          .from('registrations')
+          .select(`
+            id,
+            status,
+            payment_mode,
+            transaction_id,
+            team_members,
+            profile_id,
+            profile:profiles(
+              id,
+              full_name,
+              roll_number,
+              college_email,
+              phone,
+              gender,
+              school,
+              department,
+              year_of_study
+            ),
+            event:events(
+              id,
+              name,
+              category,
+              subcategory,
+              fee
+            )
+          `)
+          .eq('status', 'confirmed')
+          .range(from, from + 999);
+
+        if (selectedEvent) {
+          query = query.eq('event_id', selectedEvent);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allRegistrations = [...allRegistrations, ...data];
+          from += 1000;
+        } else {
+          hasMore = false;
+        }
+
+        if (allRegistrations.length >= 20000) hasMore = false;
+      }
+
+      let csvContent = '';
+      let filename = '';
+      const dateStr = getFormattedDate();
+
+      switch (exportType) {
+        case 'individual': {
+          // Filter individual events only
+          const individualRegs = allRegistrations.filter(
+            reg => reg.event?.subcategory === 'Individual'
+          );
+          const data = generateIndividualParticipantsCSV(individualRegs);
+          const headers = [
+            { label: 'Event No', key: 'Event No' },
+            { label: 'Event Name', key: 'Event Name' },
+            { label: 'Member No', key: 'Member No' },
+            { label: 'Roll Number', key: 'Roll Number' },
+            { label: 'Name', key: 'Name' },
+            { label: 'Email', key: 'Email' },
+            { label: 'School', key: 'School' },
+            { label: 'Department', key: 'Department' },
+            { label: 'Year of Study', key: 'Year of Study' },
+            { label: 'Gender', key: 'Gender' },
+            { label: 'Phone', key: 'Phone' },
+            { label: 'Category', key: 'Category' }
+          ];
+          const mainCSV = arrayToCSV(data, headers);
+          // Add summary at end
+          csvContent = `${mainCSV}\n\n\nSUMMARY\n\nTotal Individual Participants,${data.length}`;
+          filename = `Individual_Events_Export_${dateStr}.csv`;
+          break;
+        }
+        case 'group': {
+          // Filter group events only
+          const groupRegs = allRegistrations.filter(
+            reg => reg.event?.subcategory === 'Group'
+          );
+          const data = generateTeamParticipantsCSV(groupRegs);
+          const headers = [
+            { label: 'Event No', key: 'Event No' },
+            { label: 'Event Name', key: 'Event Name' },
+            { label: 'Team No', key: 'Team No' },
+            { label: 'Member No', key: 'Member No' },
+            { label: 'Roll Number', key: 'Roll Number' },
+            { label: 'Name', key: 'Name' },
+            { label: 'Email', key: 'Email' },
+            { label: 'School', key: 'School' },
+            { label: 'Department', key: 'Department' },
+            { label: 'Year of Study', key: 'Year of Study' },
+            { label: 'Gender', key: 'Gender' },
+            { label: 'Phone', key: 'Phone' },
+            { label: 'Category', key: 'Category' }
+          ];
+          const mainCSV = arrayToCSV(data, headers);
+          // Add summary at end
+          csvContent = `${mainCSV}\n\n\nSUMMARY\n\nTotal Group Event Participants,${data.length}`;
+          filename = `Group_Events_Export_${dateStr}.csv`;
+          break;
+        }
+        case 'all': {
+          // Export both individual and group in separate sections
+          const individualRegs = allRegistrations.filter(
+            reg => reg.event?.subcategory === 'Individual'
+          );
+          const groupRegs = allRegistrations.filter(
+            reg => reg.event?.subcategory === 'Group'
+          );
+
+          // Individual section
+          const individualData = generateIndividualParticipantsCSV(individualRegs);
+          const individualHeaders = [
+            { label: 'Event No', key: 'Event No' },
+            { label: 'Event Name', key: 'Event Name' },
+            { label: 'Member No', key: 'Member No' },
+            { label: 'Roll Number', key: 'Roll Number' },
+            { label: 'Name', key: 'Name' },
+            { label: 'Email', key: 'Email' },
+            { label: 'School', key: 'School' },
+            { label: 'Department', key: 'Department' },
+            { label: 'Year of Study', key: 'Year of Study' },
+            { label: 'Gender', key: 'Gender' },
+            { label: 'Phone', key: 'Phone' },
+            { label: 'Category', key: 'Category' }
+          ];
+
+          // Group section
+          const groupData = generateTeamParticipantsCSV(groupRegs);
+          const groupHeaders = [
+            { label: 'Event No', key: 'Event No' },
+            { label: 'Event Name', key: 'Event Name' },
+            { label: 'Team No', key: 'Team No' },
+            { label: 'Member No', key: 'Member No' },
+            { label: 'Roll Number', key: 'Roll Number' },
+            { label: 'Name', key: 'Name' },
+            { label: 'Email', key: 'Email' },
+            { label: 'School', key: 'School' },
+            { label: 'Department', key: 'Department' },
+            { label: 'Year of Study', key: 'Year of Study' },
+            { label: 'Gender', key: 'Gender' },
+            { label: 'Phone', key: 'Phone' },
+            { label: 'Category', key: 'Category' }
+          ];
+
+          const individualCSV = arrayToCSV(individualData, individualHeaders);
+          const groupCSV = arrayToCSV(groupData, groupHeaders);
+
+          // Calculate participant counts
+          const individualParticipantsCount = individualData.length;
+          const groupParticipantsCount = groupData.length;
+          const totalParticipantsCount = individualParticipantsCount + groupParticipantsCount;
+
+          // Build summary table
+          const summaryTable = [
+            '',
+            '',
+            'SUMMARY',
+            '',
+            'Category,Participants Count',
+            `Individual Events,${individualParticipantsCount}`,
+            `Group Events,${groupParticipantsCount}`,
+            '',
+            `TOTAL PARTICIPANTS,${totalParticipantsCount}`
+          ].join('\n');
+
+          // Combine with section headers and summary
+          csvContent = `INDIVIDUAL EVENTS\n\n${individualCSV}\n\n\nGROUP EVENTS\n\n${groupCSV}\n\n\n${summaryTable}`;
+          filename = `All_Events_Export_${dateStr}.csv`;
+          break;
+        }
+        case 'nba': {
+          // NBA format export
+          csvContent = generateNBACSV(allRegistrations);
+          filename = `NBA_Bonomy_2026_${dateStr}.csv`;
+          break;
+        }
+        default:
+          throw new Error('Unknown export type');
+      }
+
+      if (csvContent) {
+        downloadCSV(csvContent, filename);
+      } else {
+        alert('No data to export');
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // --- HTML2CANVAS DOWNLOAD HANDLER WITH WATERMARK ---
   const handleDownload = async (e, ref, fileName) => {
@@ -437,9 +660,50 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
               </option>
             ))}
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
-            <Download className="h-4 w-4" /> Export Data
-          </button>
+          <div className="relative export-dropdown-container">
+            <button
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="h-4 w-4" />
+              {isExporting ? 'Exporting...' : 'Export Data'}
+              <ChevronDown className={`h-4 w-4 transition-transform ${showExportDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showExportDropdown && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                <button
+                  onClick={() => handleExportCSV('individual')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4 text-blue-500" />
+                  Individual Events
+                </button>
+                <button
+                  onClick={() => handleExportCSV('group')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4 text-purple-500" />
+                  Group Events
+                </button>
+                <button
+                  onClick={() => handleExportCSV('all')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <BarChart2 className="h-4 w-4 text-green-500" />
+                  All Events
+                </button>
+                <div className="border-t border-gray-200 my-1"></div>
+                <button
+                  onClick={() => handleExportCSV('nba')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Award className="h-4 w-4 text-amber-500" />
+                  NBA Report
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -483,6 +747,9 @@ export default function AdminAnalytics({ coordinatorFilter = null, eventIdFilter
                       Total Registrations
                     </p>
                     <p className="text-4xl font-bold">{stats.totalRegistrations}</p>
+                    <p className="text-[10px] opacity-70 mt-1">
+                      (Registration records - Export shows confirmed participants)
+                    </p>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-[10px] text-center mt-6">
                     <div className="bg-white/10 backdrop-blur-sm rounded-lg py-2 px-2 border border-white/10 hover:bg-white/20 transition-all cursor-default">
